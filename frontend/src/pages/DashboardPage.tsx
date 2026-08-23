@@ -47,6 +47,7 @@ import {
   useProspectsQuery,
   useCompaniesQuery,
   useMonitoringQuery,
+  useCampaignsQuery,
   useAnalyticsOverviewQuery,
   useAnalyticsTimeseriesQuery,
 } from '@/hooks/useBackendData';
@@ -377,6 +378,7 @@ export function DashboardPage(): React.ReactElement {
   const prospectsQ = useProspectsQuery();
   const companiesQ = useCompaniesQuery();
   const monitoringQ = useMonitoringQuery();
+  const campaignsQ = useCampaignsQuery();
   const overviewQ = useAnalyticsOverviewQuery();
 
   // Round 22 — timeseries réels (12 derniers jours) pour les sparklines.
@@ -645,7 +647,7 @@ export function DashboardPage(): React.ReactElement {
       )}
 
       {/* ===== 1. KPI Cards ===== */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <KpiCard
           title="Hot prospects"
           value={String(hotProspects)}
@@ -673,6 +675,17 @@ export function DashboardPage(): React.ReactElement {
           onClick={() => navigate('/companies')}
         />
         <KpiCard
+          title="Campaigns"
+          value={String(campaignsQ.data?.length ?? overview?.campaigns ?? 0)}
+          delta={((campaignsQ.data?.length ?? 0) > 0 || (overview?.campaigns ?? 0) > 0) ? `+${campaignsQ.data?.length ?? overview?.campaigns ?? 0}` : '—'}
+          trend={((campaignsQ.data?.length ?? overview?.campaigns ?? 0) > 0) ? 'up' : 'flat'}
+          icon={Target}
+          accent="text-primary"
+          hint={`${(campaignsQ.data?.filter((c: any) => c.status === 'active') ?? []).length} actives`}
+          isLoading={campaignsQ.isLoading && overviewQ.isLoading}
+          onClick={() => navigate('/campaigns')}
+        />
+        <KpiCard
           title="Today's signals"
           value={String(signals.length)}
           delta={signals.length > 0 ? `+${signals.length}` : '—'}
@@ -696,7 +709,6 @@ export function DashboardPage(): React.ReactElement {
           isLoading={overviewQ.isLoading && prospectsQ.isLoading}
           series={tsWon.data ?? []}
           sparkId="spark-won"
-          onClick={() => navigate('/campaigns')}
         />
       </div>
 

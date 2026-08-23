@@ -570,7 +570,16 @@ export async function handleLocalRequest(method: string, path: string, body?: un
 
   // ---------- Campaigns ----------
   if (a === 'campaigns') {
-    if (b === undefined && m === 'GET') return ok(embStore.list<any>('campaigns').sort((x, y) => String(y.created_at).localeCompare(String(x.created_at))));
+    if (b === undefined && m === 'GET') {
+      const campaigns = embStore.list<any>('campaigns').sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)));
+      // Enrichir chaque campagne avec le nombre de prospects rattachés
+      const enriched = campaigns.map((c) => {
+        const pids = embStore.list<any>('settings').filter((s) => String(s.id).startsWith('cpl:') && String(s.id).split(':')[1] === String(c.id)).map((s) => s.prospect_id);
+        const prospectCount = embStore.list<any>('prospects').filter((p) => pids.includes(String(p.id))).length;
+        return { ...c, prospect_count: prospectCount };
+      });
+      return ok(enriched);
+    }
     if (b === undefined && m === 'POST') {
       const data = (body ?? {}) as any;
       if (!data.name) return fail('VALIDATION', 'Nom de campagne requis');

@@ -318,10 +318,10 @@ const CampaignCard: React.FC<{
 
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
-          <Clock size={12} /> Mises à jour : 0
+          <Clock size={12} /> {formatCampaignDate(c.updated_at)}
         </span>
         <span className="flex items-center gap-1">
-          <Users size={12} /> 0 prospects liés
+          <Users size={12} /> {(c as any).prospect_count ?? 0} prospects liés
         </span>
       </div>
 
