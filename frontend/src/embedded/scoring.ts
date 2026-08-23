@@ -55,6 +55,18 @@ export function buildNormalizedInput(entity: EntityLike, extra: Record<string, u
   const subsector = String(entity.industry ?? '').trim() || null;
   const city = entity.city ?? null;
   const country = entity.country ?? null;
+  const website = entity.website ?? null;
+  const email = entity.email ?? null;
+  const phone = entity.phone ?? null;
+
+  // Injecter un site_profile minimal quand on a le site web : cela différencie
+  // radicalement les scores (website_present=1, site_status_reachable=1) des
+  // entreprises sans site. Sans ça, toutes les entités de la seed ont le même score.
+  const hasSite = !!website;
+  const defaultSiteProfile: any = hasSite
+    ? { url: website, reachable: true, http_status: 200 }
+    : {};
+
   const input: any = {
     id: entity.id ?? null,
     name: String(entity.name ?? '').trim() || null,
@@ -65,18 +77,18 @@ export function buildNormalizedInput(entity: EntityLike, extra: Record<string, u
     company_size: String(entity.company_size ?? entity.size ?? '').trim() || null,
     founded_year: parseYear(entity.founded_year ?? entity.year ?? null),
     site_profile: {
-      url: entity.website ?? null,
+      ...defaultSiteProfile,
       ...(extra.site_profile ?? {}),
     },
     gbusiness: extra.gbusiness ?? {},
     social: extra.social ?? {},
     marketing: extra.marketing ?? {},
     contact: {
-      email: entity.email ?? null,
-      phone: entity.phone ?? null,
+      email,
+      phone,
       address: entity.address ?? null,
-      email_ok: Boolean(entity.email),
-      phone_ok: Boolean(entity.phone),
+      email_ok: Boolean(email),
+      phone_ok: Boolean(phone),
     },
     legal: extra.legal ?? {},
     source_timestamps: { db: entity.updated_at ?? nowIso() },
@@ -387,31 +399,96 @@ export function buildEmailDraft(
 ): EmailDraft {
   const templateId = opts.templateId ?? 'outreach_first_touch';
   const name = String(entity.name ?? '').trim() || 'votre entreprise';
-  const strength = agg.strengths[0]?.label ?? 'vos résultats';
-  const gap = agg.weaknesses[0]?.label ?? 'la modernisation de vos outils';
+  const sector = String(entity.sector ?? entity.industry ?? '').trim() || null;
+  const city = String(entity.city ?? entity.country ?? '').trim() || null;
+  const website = String(entity.website ?? '').trim() || null;
+  const email = String(entity.email ?? '').trim() || null;
+  const phone = String(entity.phone ?? '').trim() || null;
+  const firstName = String(entity.first_name ?? '').trim() || null;
+  const lastName = String(entity.last_name ?? '').trim() || null;
+  const role = String(entity.role ?? '').trim() || null;
+  const need = FR(agg.need_score);
+  const opp = FR(agg.opportunity_score);
+  const conf = FR(agg.confidence);
+
+  // Extraire forces/faiblesses significatives (pas les génériques)
+  const strengths: any[] = agg.strengths ?? [];
+  const weaknesses: any[] = agg.weaknesses ?? [];
+  const realStrength = strengths.find((s: any) =>
+    !['Site web présent', 'Email public détecté', 'Téléphone public détecté'].includes(s.label)
+  )?.label ?? strengths[0]?.label ?? null;
+  const realGap = weaknesses.find((w: any) =>
+    !['Aucun email public', 'Aucun téléphone public'].includes(w.label)
+  )?.label ?? weaknesses[0]?.label ?? null;
+
+  // Observation 100% personnalisée
+  let observation = '';
+  if (website && sector && city) {
+    observation = `J'ai parcouru ${website.replace(/^https?:\/\//, '')} — ${name}, ${sector} à ${city}, c'est clair.`;
+  } else if (website && sector) {
+    observation = `J'ai regardé ${website.replace(/^https?:\/\//, '')} — positionnement ${sector} intéressant.`;
+  } else if (website) {
+    observation = `J'ai analysé ${website.replace(/^https?:\/\//, '')} — belle vitrine.`;
+  } else if (sector && city) {
+    observation = `J'analyse les acteurs ${sector} sur ${city} — ${name} ressort.`;
+  } else if (sector) {
+    observation = `Je cartographie le secteur ${sector} — j'ai repéré ${name}.`;
+  } else {
+    observation = `Je m'intéresse à ${name} — votre positionnement m'intrigue.`;
+  }
+
+  // Problème détecté (spécifique, pas générique)
+  let problemLine = '';
+  if (realGap && !['Aucun email public', 'Aucun téléphone public'].includes(realGap)) {
+    problemLine = `J'ai noté un point : ${realGap.toLowerCase()}. C'est souvent synonyme de croissance non captée.`;
+  } else if (!email && !phone && website) {
+    problemLine = `Un détail : aucun contact direct accessible depuis ${website.replace(/^https?:\/\//, '')}. Vos prospects doivent chercher — et certains abandonnent.`;
+  } else if (!email && !phone) {
+    problemLine = 'Aucun contact direct trouvé sur vos supports publics — vos prospects passent leur chemin.';
+  } else if (need >= 50) {
+    problemLine = `${name} a un potentiel d'optimisation important sur sa visibilité et sa conversion.`;
+  } else if (website) {
+    problemLine = `Votre site ${website.replace(/^https?:\/\//, '')} est en place, mais il manque un levier de conversion mesurable.`;
+  } else {
+    problemLine = `J'ai identifié quelques angles morts dans votre dispositif commercial.`;
+  }
+
+  const consequence = 'Conséquence : des opportunités qualifiées qui passent sans être détectées ni converties.';
+
+  let solution = '';
+  if (opp >= 70) {
+    solution = 'Zentara automatise la détection de ces signaux faibles et les transforme en pipeline commercial actionnable en 48h.';
+  } else if (opp >= 50) {
+    solution = 'Zentara analyse, score et priorise vos cibles — automatiquement. Le pipeline se remplit sans effort.';
+  } else {
+    solution = 'Zentara pose les fondations : scoring automatique, emails prêts à l\'envoi, suivi intelligent.';
+  }
+
   const ctaUrl = opts.ctaUrl ?? 'https://cal.com/zentara/demo';
+
   const vars: Record<string, unknown> = {
-    recipient_first_name: String(entity.first_name ?? '').trim() || undefined,
-    recipient_last_name: String(entity.last_name ?? '').trim() || undefined,
-    recipient_role: String(entity.role ?? '').trim() || undefined,
+    recipient_first_name: firstName || undefined,
+    recipient_last_name: lastName || undefined,
+    recipient_role: role || undefined,
     company_name: name,
-    company_sector: String(entity.sector ?? entity.industry ?? '').trim() || undefined,
-    city: String(entity.city ?? entity.country ?? '').trim() || undefined,
-    observation: `J’ai analysé la présence digitale de ${name} (${FR(agg.opportunity_score)}/100 d’opportunité).`,
-    problem: gap,
-    consequence: 'Un décideur sans visibilité sur ces points laisse de la croissance sur la table.',
-    solution: 'Zentara automatise l’analyse commerciale et la génération d’emails personnalisés.',
-    why_now: `L’urgence est ${agg.urgency} et le risque de contact ${agg.contact_risk}.`,
-    demo_pitch: 'Une démo de 15 minutes suffit pour voir vos premiers résultats.',
-    slot_proposal: 'Je vous propose un créneau cette semaine.',
-    top_finding: strength,
-    cta_text: 'Réserver un créneau',
+    company_sector: sector || undefined,
+    city: city || undefined,
+    observation,
+    problem: problemLine,
+    consequence,
+    solution,
+    why_now: need >= 60 ? 'Le marché accélère — les premiers arrivés sur ces sujets prennent l\'avantage.' : 'Maintenant, avant que le marché ne se structure — c\'est le bon timing.',
+    demo_pitch: '15 minutes pour vous montrer concrètement, sur vos données.',
+    slot_proposal: 'Disponible cette semaine pour un échange — qu\'est-ce qui vous arrange ?',
+    top_finding: realStrength || (website ? website.replace(/^https?:\/\//, '') : name),
+    cta_text: 'Voir ce que ça donne',
     cta_url: ctaUrl,
     sender_name: opts.senderName ?? 'Tuna',
     sender_role: opts.senderRole ?? 'Fondateur, Zentara',
     your_name: opts.senderName ?? 'Tuna',
     your_role: opts.senderRole ?? 'Fondateur, Zentara',
   };
+
   let rendered;
   try {
     rendered = templates.renderEmailTemplate(templateId, vars);
