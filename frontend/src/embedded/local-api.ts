@@ -44,15 +44,72 @@ const fail = (code: string, message: string, status = 400): LocalRouteResult => 
 // Si elles échouent, elles sont marquées comme « hors-ligne ».
 let _webSourcesCache: Array<{ source: string; message: string; available: boolean }> | null = null;
 
+function getBackendUrl(): string | null {
+  try {
+    const stored = localStorage.getItem('zentara.api.base');
+    if (stored && stored.trim().length > 0) return stored.trim().replace(/\/+$/, '');
+    return null;
+  } catch { return null; }
+}
+
+let _backendReachable = false;
+
+async function probeBackend(): Promise<boolean> {
+  const base = getBackendUrl();
+  if (!base) { _backendReachable = false; return false; }
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const r = await fetch(`${base}/health`, { signal: ctrl.signal });
+    clearTimeout(timer);
+    _backendReachable = r.ok;
+    return r.ok;
+  } catch {
+    _backendReachable = false;
+    return false;
+  }
+}
+
+/** Appelle le backend réel pour la recherche engine (LinkedIn inclus). */
+async function fetchBackendSearch(payload: any): Promise<any | null> {
+  const base = getBackendUrl();
+  if (!base) return null;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 25_000);
+    const res = await fetch(`${base}/engine/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.success !== false ? (json.data ?? json) : null;
+  } catch {
+    return null;
+  }
+}
+
 function getWebSourceStatus(): Array<{ source: string; message: string; available: boolean }> {
-  if (_webSourcesCache) return _webSourcesCache;
-  // Par défaut, on considère que les sources directes sont disponibles.
-  // Elles passeront à "hors-ligne" si les appels échouent.
-  _webSourcesCache = [
-    { source: 'zentara-companies', message: 'SEC EDGAR (API directe)', available: true },
-    { source: 'zentara-people', message: 'LinkedIn People — nécessite le backend', available: false },
-    { source: 'zentara-local', message: 'OpenStreetMap / Overpass (API directe)', available: true },
-  ];
+  // Refresh people availability based on backend probe
+  const peopleAvailable = _backendReachable || getBackendUrl() !== null;
+
+  if (!_webSourcesCache) {
+    _webSourcesCache = [
+      { source: 'zentara-companies', message: 'SEC EDGAR (API directe)', available: true },
+      { source: 'zentara-people', message: peopleAvailable ? 'LinkedIn People (backend connecté)' : 'LinkedIn People — nécessite le backend', available: peopleAvailable },
+      { source: 'zentara-local', message: 'OpenStreetMap / Overpass (API directe)', available: true },
+    ];
+  } else {
+    // Update people availability dynamically
+    const people = _webSourcesCache.find((s) => s.source === 'zentara-people');
+    if (people) {
+      people.available = peopleAvailable;
+      people.message = peopleAvailable ? 'LinkedIn People (backend connecté)' : 'LinkedIn People — nécessite le backend';
+    }
+  }
   return _webSourcesCache;
 }
 
@@ -687,6 +744,10 @@ export async function handleLocalRequest(method: string, path: string, body?: un
   // ---------- Engine (Zentara One) ----------
   if (a === 'engine') {
     if (b === 'status') {
+      // Background probe du backend (non bloquant pour la première réponse)
+      if (getBackendUrl() && !_backendReachable) {
+        probeBackend().catch(() => {});
+      }
       const ws = getWebSourceStatus();
       return ok({
         engine: 'zentara-one',
@@ -839,8 +900,61 @@ export async function handleLocalRequest(method: string, path: string, body?: un
         }
       }
 
-      // Fusionner les résultats : web d'abord (plus frais), puis local
-      const allResults = [...webResults, ...localResults];
+      // --- Backend proxy (LinkedIn People) ---
+      // Si un backend Zentara est configuré et joignable, on lui délègue
+      // aussi la recherche pour obtenir les résultats LinkedIn (StaffSpy).
+      let backendResults: any[] = [];
+      if (getBackendUrl()) {
+        try {
+          const backendPayload: any = { mode, query: query || undefined, needs: needs || undefined, roles: needs || undefined, location: location || undefined, radius: radiusKm || undefined, limit: Math.ceil(limit * 1.5), save: false };
+          const backendData = await fetchBackendSearch(backendPayload);
+          if (backendData && Array.isArray(backendData.results)) {
+            // Le backend renvoie déjà des hits au même format
+            for (const bh of backendData.results) {
+              const dup = webResults.concat(localResults).find((lr) => {
+                const bn = (bh.name ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                const ln = (lr.name ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                return bn && ln && (bn === ln || bn.includes(ln) || ln.includes(bn));
+              });
+              if (!dup) {
+                backendResults.push({
+                  id: bh.id ?? `be-${Math.random().toString(36).slice(2, 10)}`,
+                  type: bh.type ?? 'company',
+                  name: bh.name,
+                  title: bh.title ?? null,
+                  category: bh.category ?? null,
+                  city: bh.city ?? null,
+                  country: bh.country ?? null,
+                  website: bh.website ?? null,
+                  email: bh.email ?? null,
+                  phone: bh.phone ?? null,
+                  linkedin: bh.linkedin ?? null,
+                  source: bh.source ?? 'zentara-people',
+                  sourceGroup: bh.sourceGroup ?? bh.source ?? 'backend',
+                  confidence: bh.confidence ?? 0.9,
+                  score: bh.score ?? 55,
+                  tags: bh.tags ?? [],
+                  company_id: bh.company_id ?? null,
+                  company_created: false,
+                });
+              }
+            }
+            if (backendData.sources) {
+              for (const s of backendData.sources) {
+                if (!usedSources.includes(s)) usedSources.push(s);
+              }
+            }
+            // Marquer LinkedIn comme disponible
+            const peopleSrc = getWebSourceStatus().find((s) => s.source === 'zentara-people');
+            if (peopleSrc) peopleSrc.available = true;
+          }
+        } catch (e) {
+          console.warn('[engine] Backend proxy failed:', e);
+        }
+      }
+
+      // Fusionner les résultats : backend d'abord (LinkedIn > SEC > OSM), puis web, puis local
+      const allResults = [...backendResults, ...webResults, ...localResults];
       // Supprimer les doublons approximatifs
       const deduped: typeof allResults = [];
       const seen = new Set<string>();
