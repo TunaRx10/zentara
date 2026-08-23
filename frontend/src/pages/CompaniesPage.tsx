@@ -1489,7 +1489,8 @@ export function CompaniesPage(): React.ReactElement {
 
   const filtered = React.useMemo(() => {
     const q = searchQuery.toLowerCase();
-    return (queries.data ?? [])
+    const data = Array.isArray(queries.data) ? queries.data : [];
+    return data
       .map((c) => ({ ...c, _score: scoreFor(c) }))
       .filter((c) => {
         const matchesQ =
@@ -1517,13 +1518,13 @@ export function CompaniesPage(): React.ReactElement {
   }, [queries.data, searchQuery, tierFilter, designFilter, sortKey]);
 
   const counts = React.useMemo(
-    () => countByTier((queries.data ?? []).map(scoreFor)),
+    () => countByTier((Array.isArray(queries.data) ? queries.data : []).map(scoreFor)),
     [queries.data],
   );
 
   // Round 61 — design-filter chip count: companies taguées 'design' (issues audit < 70).
   const designCount = React.useMemo(
-    () => (queries.data ?? []).filter((c) => Array.isArray(c.tags) && c.tags.includes('design')).length,
+    () => (Array.isArray(queries.data) ? queries.data : []).filter((c) => Array.isArray(c.tags) && c.tags.includes('design')).length,
     [queries.data],
   );
 
@@ -1531,7 +1532,7 @@ export function CompaniesPage(): React.ReactElement {
   const { visible: paged, hasMore, showMore, shown, total: filteredTotal } = useShowMore(filtered, PAGER_STEP);
 
   const expandedCompany = React.useMemo(
-    () => (queries.data ?? []).find((c) => c.id === expandedId) ?? null,
+    () => (Array.isArray(queries.data) ? queries.data : []).find((c) => c.id === expandedId) ?? null,
     [queries.data, expandedId],
   );
 
@@ -1615,7 +1616,7 @@ export function CompaniesPage(): React.ReactElement {
             </span>
             <span className="text-[10px] text-muted-foreground/60">·</span>
             <span className="text-[10px] font-bold text-muted-foreground">
-              {(queries.data ?? []).length} companies · {counts.hot} hot · {counts.warm} warm · {counts.cold} cold
+              {(Array.isArray(queries.data) ? queries.data : []).length} companies · {counts.hot} hot · {counts.warm} warm · {counts.cold} cold
             </span>
           </div>
           <h2 className="text-3xl font-black tracking-tight">Companies</h2>
@@ -1712,7 +1713,7 @@ export function CompaniesPage(): React.ReactElement {
       {/* Tier + Design filter chips (Round 61 — design chip is parallel to tier, additive) */}
       <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Filter by tier or design">
         {[
-          { id: 'all' as const, label: 'All', count: (queries.data ?? []).length, tier: 'all' as const },
+          { id: 'all' as const, label: 'All', count: (Array.isArray(queries.data) ? queries.data : []).length, tier: 'all' as const },
           { id: 'hot' as const, label: 'Hot', count: counts.hot, tier: 'hot' as const },
           { id: 'warm' as const, label: 'Warm', count: counts.warm, tier: 'warm' as const },
           { id: 'cold' as const, label: 'Cold', count: counts.cold, tier: 'cold' as const },
