@@ -19,6 +19,8 @@ import {
   type EntityLike,
 } from './scoring';
 import { createLocalJob, getJob, listJobs, cancelLocalJob, retryLocalJob, type LocalJob } from './jobs';
+import { searchOverpass, searchOverpassByKeyword, geocodeNominatim, type OSMResult } from './overpass';
+import { searchEDGARByName, searchEDGARByTicker, searchEDGARBySector, type EDGARCompany } from './sec-edgar';
 
 export interface LocalError {
   code: string;
@@ -38,14 +40,33 @@ const fail = (code: string, message: string, status = 400): LocalRouteResult => 
   error: { code, message, status },
 });
 
-// Sources web indisponibles en mode embarqué (aucun accès réseau).
-// Exposées dans la réponse /engine/search pour que le chat affiche le
-// nombre de sources injoignables et ne laisse pas croire à un résultat complet.
-const OFFLINE_WEB_SOURCES: Array<{ source: string; message: string }> = [
-  { source: 'zentara-companies', message: 'Annuaires web (SEC EDGAR, OpenCorporates…) — hors-ligne' },
-  { source: 'zentara-people', message: 'LinkedIn People — hors-ligne' },
-  { source: 'zentara-local', message: 'OpenStreetMap / Google Maps — hors-ligne' },
-];
+// Sources web — on tente d'abord les APIs directes (navigateur).
+// Si elles échouent, elles sont marquées comme « hors-ligne ».
+let _webSourcesCache: Array<{ source: string; message: string; available: boolean }> | null = null;
+
+function getWebSourceStatus(): Array<{ source: string; message: string; available: boolean }> {
+  if (_webSourcesCache) return _webSourcesCache;
+  // Par défaut, on considère que les sources directes sont disponibles.
+  // Elles passeront à "hors-ligne" si les appels échouent.
+  _webSourcesCache = [
+    { source: 'zentara-companies', message: 'SEC EDGAR (API directe)', available: true },
+    { source: 'zentara-people', message: 'LinkedIn People — nécessite le backend', available: false },
+    { source: 'zentara-local', message: 'OpenStreetMap / Overpass (API directe)', available: true },
+  ];
+  return _webSourcesCache;
+}
+
+function markWebSourceOffline(source: string): void {
+  const s = getWebSourceStatus();
+  const entry = s.find((x) => x.source === source);
+  if (entry) entry.available = false;
+}
+
+function getOfflineErrors(): Array<{ source: string; message: string }> {
+  return getWebSourceStatus()
+    .filter((s) => !s.available)
+    .map((s) => ({ source: s.source, message: s.message }));
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -254,7 +275,7 @@ function searchLocal(query: string, mode: string, limit: number, needs = ''): an
 // Router principal
 // ---------------------------------------------------------------------------
 
-export function handleLocalRequest(method: string, path: string, body?: unknown): LocalRouteResult {
+export async function handleLocalRequest(method: string, path: string, body?: unknown): Promise<LocalRouteResult> {
   ensureSeeded();
   const { segments, params } = parsePath(path);
   const m = method.toUpperCase();
@@ -666,13 +687,14 @@ export function handleLocalRequest(method: string, path: string, body?: unknown)
   // ---------- Engine (Zentara One) ----------
   if (a === 'engine') {
     if (b === 'status') {
+      const ws = getWebSourceStatus();
       return ok({
         engine: 'zentara-one',
         groups: [
           { id: 'local', label: 'Base locale (offline)', available: true },
-          { id: 'zentara-companies', label: 'Companies (annuaires web)', available: false },
-          { id: 'zentara-people', label: 'People (LinkedIn)', available: false },
-          { id: 'zentara-local', label: 'Local (OpenStreetMap)', available: false },
+          { id: 'zentara-companies', label: 'Companies (SEC EDGAR)', available: ws.find((x) => x.source === 'zentara-companies')?.available ?? false },
+          { id: 'zentara-people', label: 'People (LinkedIn)', available: ws.find((x) => x.source === 'zentara-people')?.available ?? false },
+          { id: 'zentara-local', label: 'Local (OpenStreetMap)', available: ws.find((x) => x.source === 'zentara-local')?.available ?? false },
         ],
         modes: ['all', 'companies', 'people', 'local'],
         mode: 'embedded',
@@ -683,19 +705,165 @@ export function handleLocalRequest(method: string, path: string, body?: unknown)
       const mode = data.mode ?? 'all';
       const query = String(data.query ?? data.q ?? '').trim();
       const needs = String(data.needs ?? data.roles ?? '').trim();
+      const location = String(data.location ?? '').trim();
       const limit = Math.min(Number(data.limit) || 20, 100);
-      if (!query && !needs) return ok({ engine: 'local', mode, results: [], total: 0, sources: ['local-db'], errors: OFFLINE_WEB_SOURCES, companies_created: 0, prospects_created: 0, contacts_created: 0 });
-      const results = searchLocal(query, mode, limit, needs);
+      const radiusKm = Number(data.radius) || 10;
+
+      if (!query && !needs && !location) {
+        return ok({ engine: 'local', mode, results: [], total: 0, sources: ['local-db'], errors: getOfflineErrors(), companies_created: 0, prospects_created: 0, contacts_created: 0 });
+      }
+
+      // Récupérer d'abord les résultats locaux
+      const localResults = searchLocal(query, mode, limit, needs);
+      let webResults: any[] = [];
+      const usedSources: string[] = ['local-db'];
+      let companiesCreated = 0;
+      let prospectsCreated = 0;
+      let contactsCreated = 0;
+
+      // Ajouter les recherches web directes (navigateur → APIs publiques)
+      const doWeb = mode === 'all' || mode === 'companies' || mode === 'local';
+
+      if (doWeb && (query || location)) {
+        // --- OSM / Overpass (Local) ---
+        if (mode === 'all' || mode === 'local') {
+          try {
+            let lat: number | undefined;
+            let lon: number | undefined;
+
+            // Géocode si un lieu est donné
+            if (location) {
+              const geo = await geocodeNominatim(location);
+              if (geo) { lat = geo.lat; lon = geo.lon; }
+            } else {
+              // Fallback : coordonnées par défaut (Paris)
+              lat = 48.8566;
+              lon = 2.3522;
+            }
+
+            if (lat != null && lon != null) {
+              const osmResults = await searchOverpass(query || 'office', lat, lon, radiusKm * 1000, Math.ceil(limit / 2));
+              for (const r of osmResults) {
+                // Éviter les doublons avec les résultats locaux
+                const dup = localResults.find((lr) => lr.name?.toLowerCase() === r.name.toLowerCase());
+                if (!dup) {
+                  webResults.push({
+                    id: r.id,
+                    type: 'company',
+                    name: r.name,
+                    title: null,
+                    category: r.category,
+                    city: r.city,
+                    country: r.country,
+                    website: r.website,
+                    email: r.email,
+                    phone: r.phone,
+                    linkedin: null,
+                    source: r.source,
+                    sourceGroup: 'openstreetmap',
+                    confidence: r.confidence,
+                    score: 50, // score neutre faute d'analyse
+                    tags: [],
+                    company_id: null,
+                    company_created: false,
+                  });
+                }
+              }
+              usedSources.push('openstreetmap');
+            }
+          } catch (e) {
+            console.warn('[engine] OSM search failed:', e);
+            markWebSourceOffline('zentara-local');
+          }
+        }
+
+        // --- SEC EDGAR (Companies) ---
+        if (mode === 'all' || mode === 'companies') {
+          try {
+            // Cherche par nom ou ticker
+            const edgarQuery = query || needs;
+            if (edgarQuery) {
+              // Détecte si c'est un ticker (1-5 lettres majuscules)
+              const tickerMatch = edgarQuery.match(/^[A-Z]{1,5}$/);
+              let edgarResults: EDGARCompany[];
+              if (tickerMatch) {
+                const r = await searchEDGARByTicker(tickerMatch[0]);
+                edgarResults = r ? [r] : await searchEDGARByName(edgarQuery, limit);
+              } else {
+                // Essayer de matcher par secteur si le mot-clé ressemble à un secteur
+                edgarResults = await searchEDGARByName(edgarQuery, limit);
+                // Si peu de résultats, chercher aussi par secteur
+                if (edgarResults.length < 3) {
+                  const sectorResults = await searchEDGARBySector(edgarQuery, limit - edgarResults.length);
+                  for (const sr of sectorResults) {
+                    if (!edgarResults.find((er) => er.cik === sr.cik)) {
+                      edgarResults.push(sr);
+                    }
+                  }
+                }
+              }
+
+              for (const r of edgarResults.slice(0, Math.ceil(limit / 2))) {
+                const dup = localResults.concat(webResults).find(
+                  (lr) => lr.name?.toLowerCase().includes(r.name.toLowerCase()) || r.name.toLowerCase().includes(lr.name?.toLowerCase()),
+                );
+                if (!dup) {
+                  webResults.push({
+                    id: `edgar-${r.cik}`,
+                    type: 'company',
+                    name: r.name,
+                    title: r.ticker,
+                    category: r.sector,
+                    city: r.city,
+                    country: r.country,
+                    website: r.website,
+                    email: r.email,
+                    phone: null,
+                    linkedin: null,
+                    source: r.source,
+                    sourceGroup: 'sec-edgar',
+                    confidence: r.confidence,
+                    score: r.ticker ? 60 : 45,
+                    tags: r.ticker ? [r.ticker] : [],
+                    company_id: null,
+                    company_created: false,
+                  });
+                }
+              }
+              usedSources.push('sec-edgar');
+            }
+          } catch (e) {
+            console.warn('[engine] SEC EDGAR search failed:', e);
+            markWebSourceOffline('zentara-companies');
+          }
+        }
+      }
+
+      // Fusionner les résultats : web d'abord (plus frais), puis local
+      const allResults = [...webResults, ...localResults];
+      // Supprimer les doublons approximatifs
+      const deduped: typeof allResults = [];
+      const seen = new Set<string>();
+      for (const r of allResults) {
+        const key = (r.name ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 30);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(r);
+      }
+      // Trier par score décroissant
+      deduped.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      const final = deduped.slice(0, limit);
+
       return ok({
-        engine: 'local',
+        engine: 'zentara-one',
         mode,
-        results,
-        total: results.length,
-        sources: ['local-db'],
-        errors: OFFLINE_WEB_SOURCES,
-        companies_created: 0,
-        prospects_created: 0,
-        contacts_created: 0,
+        results: final,
+        total: final.length,
+        sources: [...new Set(usedSources)],
+        errors: getOfflineErrors(),
+        companies_created: companiesCreated,
+        prospects_created: prospectsCreated,
+        contacts_created: contactsCreated,
       });
     }
     if (b === 'job-email' && m === 'POST') {
@@ -865,7 +1033,19 @@ export function handleLocalRequest(method: string, path: string, body?: unknown)
   // ---------- Search ----------
   if (a === 'search') {
     if (b === 'external') {
-      if (m === 'POST') return ok({ results: [], total: 0, sources: [], errors: [{ source: 'web', message: 'Recherche web (annuaires) indisponible en mode embarqué — la base locale répond quand même.' }] });
+      if (m === 'POST') {
+        // La recherche web externe (keelead, MCP, etc.) nécessite le backend.
+        // Le mode embarqué utilise les APIs directes (Overpass + SEC EDGAR)
+        // exposées via /engine/search (Zentara One).
+        const ws = getWebSourceStatus();
+        const available = ws.filter((s) => s.available);
+        return ok({
+          results: [],
+          total: 0,
+          sources: ['local-db', ...available.map((s) => s.source)],
+          errors: ws.filter((s) => !s.available).map((s) => ({ source: s.source, message: s.message })),
+        });
+      }
       if (m === 'GET') return ok({ running: false, last: null, sources: [] });
       if (c === 'import' && m === 'POST') return ok({ imported: 0 });
     }

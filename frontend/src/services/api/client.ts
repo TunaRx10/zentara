@@ -133,9 +133,9 @@ class ApiClient {
     //     local si le serveur est injoignable (l'app ne meurt jamais).
     // =====================================================================
     const embeddedFirst = isEmbeddedMode();
-    const localAttempt = (): T | undefined => {
+    const localAttempt = async (): Promise<T | undefined> => {
       try {
-        const local = handleLocalRequest(method, path, body);
+        const local = await handleLocalRequest(method, path, body);
         if (!local.handled) return undefined;
         if (local.error) {
           throw new ZentaraApiError(local.error.status ?? 500, local.error.code, local.error.message);
@@ -151,7 +151,7 @@ class ApiClient {
     };
 
     if (embeddedFirst) {
-      const out = localAttempt();
+      const out = await localAttempt();
       if (out !== undefined) return out;
     }
 
@@ -235,7 +235,7 @@ class ApiClient {
     } catch (err) {
       // Repli local quand un serveur distant est configuré mais injoignable.
       if (!embeddedFirst && !(err instanceof ZentaraApiError && err.code === 'CANCELLED')) {
-        const out = localAttempt();
+        const out = await localAttempt();
         if (out !== undefined) return out;
       }
       throw err;
