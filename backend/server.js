@@ -383,14 +383,26 @@ api.get('/companies/:id/prospects', (req, res) => {
 api.get('/companies/:id/aggregate-score', (req, res) => {
   const company = getById('companies', req.params.id);
   if (!company) return fail(res, 404, 'NOT_FOUND', 'company not found');
+
+  const prospects = db.prepare("SELECT score FROM prospects WHERE company_id = ?").all(req.params.id);
+  const prospectsAvg = prospects.length > 0 ? prospects.reduce((acc, p) => acc + (p.score || 0), 0) / prospects.length : 0;
+  
+  const intel = db.prepare('SELECT score FROM intelligence WHERE entity_type = ? AND entity_id = ? ORDER BY created_at DESC LIMIT 1').get('company', req.params.id);
+  const criticalSignals = Number(db.prepare("SELECT COUNT(*) AS c FROM monitoring WHERE entity_type = ? AND entity_id = ? AND confidence >= 90").get('company', req.params.id).c);
+  const warningSignals = Number(db.prepare("SELECT COUNT(*) AS c FROM monitoring WHERE entity_type = ? AND entity_id = ? AND confidence >= 80 AND confidence < 90").get('company', req.params.id).c);
+
   ok(res, {
     company_id: req.params.id,
     score: Number(company.score || 0),
     breakdown: {
-      companyScore: Number(company.score || 0),
-      prospectsAvg: 0,
-      intelligenceScore: 0,
-      signalsBonus: 0,
+      company_score: Number(company.score || 0),
+      prospects_avg: Math.round(prospectsAvg),
+      prospects_count: prospects.length,
+      intelligence_score: intel ? Number(intel.score || 0) : null,
+      critical_signals: criticalSignals,
+      warning_signals: warningSignals,
+      replied_emails: 0,
+      active_outreach_sequences: 0,
     },
     tier: Number(company.score || 0) >= 70 ? 'HOT' : Number(company.score || 0) >= 40 ? 'WARM' : 'COLD',
   });
@@ -550,17 +562,55 @@ api.get('/analytics/overview', (_req, res) => {
 
 api.get('/analytics/timeseries', (req, res) => {
   const metric = String(req.query.metric || 'hot_prospects');
-  const days = Number(req.query.days || 12);
-  ok(res, { metric, days, points: [] });
+  const days = Math.min(Math.max(Number(req.query.days || 12), 7), 90);
+
+  const points = [];
+  const now = new Date();
+
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0]; // YYYY-MM-DD
+
+    let val = 0;
+    try {
+      if (metric === 'hot_prospects') {
+        val = Number(db.prepare("SELECT COUNT(*) AS c FROM prospects WHERE score >= 70 AND date(created_at) <= date(?)").get(dateStr).c);
+      } else if (metric === 'hot_companies') {
+        val = Number(db.prepare("SELECT COUNT(*) AS c FROM companies WHERE score >= 70 AND date(created_at) <= date(?)").get(dateStr).c);
+      } else if (metric === 'signals') {
+        val = Number(db.prepare("SELECT COUNT(*) AS c FROM monitoring WHERE date(detected_at) <= date(?)").get(dateStr).c);
+      } else if (metric === 'won') {
+        val = Number(db.prepare("SELECT COUNT(*) AS c FROM prospects WHERE status = 'won' AND date(updated_at) <= date(?)").get(dateStr).c);
+      }
+    } catch (e) {
+      /* ignore db error for a single point */
+    }
+    points.push({ date: dateStr, value: val });
+  }
+
+  ok(res, { metric, days, points });
 });
 
 api.get('/analytics/hot-prospects', (req, res) => {
   const minScore = Number(req.query.min_score || 70);
   const limit = Number(req.query.limit || 25);
   const offset = Number(req.query.offset || 0);
+
+  const rows = db.prepare(`
+    SELECT p.*, c.name AS company_name 
+    FROM prospects p
+    LEFT JOIN companies c ON p.company_id = c.id
+    WHERE p.score >= ? 
+    ORDER BY p.score DESC, p.updated_at DESC
+    LIMIT ? OFFSET ?
+  `).all(minScore, limit, offset);
+
+  const total = Number(db.prepare("SELECT COUNT(*) AS c FROM prospects WHERE score >= ?").get(minScore).c);
+
   ok(res, {
-    data: [],
-    meta: { total: 0, limit, offset, threshold: minScore, sector: req.query.sector || null },
+    data: rows.map((r) => normalizeRow(r)),
+    meta: { total, limit, offset, threshold: minScore, sector: req.query.sector || null },
   });
 });
 
@@ -568,9 +618,19 @@ api.get('/companies/hot-companies', (req, res) => {
   const minScore = Number(req.query.min_score || 70);
   const limit = Number(req.query.limit || 25);
   const offset = Number(req.query.offset || 0);
+
+  const rows = db.prepare(`
+    SELECT * FROM companies 
+    WHERE score >= ? 
+    ORDER BY score DESC, updated_at DESC
+    LIMIT ? OFFSET ?
+  `).all(minScore, limit, offset);
+
+  const total = Number(db.prepare("SELECT COUNT(*) AS c FROM companies WHERE score >= ?").get(minScore).c);
+
   ok(res, {
-    data: [],
-    meta: { total: 0, limit, offset, threshold: minScore, sector: req.query.sector || null },
+    data: rows.map((r) => normalizeRow(r)),
+    meta: { total, limit, offset, threshold: minScore, sector: req.query.sector || null },
   });
 });
 
@@ -646,7 +706,19 @@ api.get('/tasks', (req, res) => {
 });
 
 api.get('/tasks/counts', (_req, res) => {
-  ok(res, { unseen_done: 0, unseen_failed: 0, running: 0, last_24h_done: 0, last_24h_failed: 0, unseen: 0, last_24h: 0 });
+  const unseen = Number(db.prepare("SELECT COUNT(*) AS c FROM tasks WHERE seen_at IS NULL").get().c);
+  const running = Number(db.prepare("SELECT COUNT(*) AS c FROM tasks WHERE status = 'running'").get().c);
+  const failed = Number(db.prepare("SELECT COUNT(*) AS c FROM tasks WHERE status = 'failed' AND seen_at IS NULL").get().c);
+
+  ok(res, {
+    unseen_done: 0,
+    unseen_failed: failed,
+    running: running,
+    last_24h_done: 0,
+    last_24h_failed: 0,
+    unseen: unseen,
+    last_24h: 0,
+  });
 });
 
 api.get('/tasks/heartbeat', (_req, res) => ok(res, healthPayload()));
@@ -2352,11 +2424,21 @@ api.post('/search/external/import', (req, res) => {
   ok(res, { created, skipped, ids });
 });
 
-api.get('/outreach/company/:id', (req, res) => ok(res, {
-  company_id: req.params.id,
-  emails: [], sequences: [],
-  total_emails: 0, total_sent: 0, total_replied: 0, total_bounced: 0, total_active_sequences: 0,
-}));
+api.get('/outreach/company/:id', (req, res) => {
+  const companyId = req.params.id;
+  const emails = db.prepare('SELECT * FROM emails WHERE company_id = ?').all(companyId);
+
+  ok(res, {
+    company_id: companyId,
+    emails: emails.map((r) => normalizeRow(r)),
+    sequences: [],
+    total_emails: emails.length,
+    total_sent: emails.filter((e) => e.status === 'sent').length,
+    total_replied: emails.filter((e) => e.status === 'replied').length,
+    total_bounced: emails.filter((e) => e.status === 'bounced').length,
+    total_active_sequences: 0,
+  });
+});
 api.get('/outreach/timeline/:prospectId', (req, res) => ok(res, { prospect_id: req.params.prospectId, emails: [], current_sequence: null }));
 api.get('/outreach/inbox', (_req, res) => {
   const rows = db.prepare('SELECT * FROM emails ORDER BY created_at DESC LIMIT 200').all();
