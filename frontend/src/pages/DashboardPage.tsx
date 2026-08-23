@@ -388,9 +388,10 @@ export function DashboardPage(): React.ReactElement {
   const tsWon = useAnalyticsTimeseriesQuery('won');
 
   // ----- Derived data -----
-  const prospects: Prospect[] = prospectsQ.data ?? [];
-  const companies: Company[] = companiesQ.data ?? [];
-  const signals: MonitoringSignal[] = monitoringQ.data ?? [];
+  const prospects: Prospect[] = Array.isArray(prospectsQ.data) ? prospectsQ.data : [];
+  const companies: Company[] = Array.isArray(companiesQ.data) ? companiesQ.data : [];
+  const signals: MonitoringSignal[] = Array.isArray(monitoringQ.data) ? monitoringQ.data : [];
+  const campaignsList: any[] = Array.isArray(campaignsQ.data) ? campaignsQ.data : [];
   const overview = overviewQ.data;
 
   // Round 50 — split companies by 'design' tag for the 2 dashboard pipelines.
@@ -485,7 +486,7 @@ export function DashboardPage(): React.ReactElement {
   }, [tick]);
 
   // ----- Hot prospects (top 5 by score desc, then by created_at desc tiebreak) -----
-  const TOP_HOT = [...prospects]
+  const TOP_HOT = (Array.isArray(prospects) ? [...prospects] : [])
     .sort((a, b) => {
       const ds = (b.score ?? 0) - (a.score ?? 0);
       if (ds !== 0) return ds;
@@ -676,12 +677,12 @@ export function DashboardPage(): React.ReactElement {
         />
         <KpiCard
           title="Campaigns"
-          value={String(campaignsQ.data?.length ?? overview?.campaigns ?? 0)}
-          delta={((campaignsQ.data?.length ?? 0) > 0 || (overview?.campaigns ?? 0) > 0) ? `+${campaignsQ.data?.length ?? overview?.campaigns ?? 0}` : '—'}
-          trend={((campaignsQ.data?.length ?? overview?.campaigns ?? 0) > 0) ? 'up' : 'flat'}
+          value={String(campaignsList.length || overview?.campaigns || 0)}
+          delta={(campaignsList.length > 0 || (overview?.campaigns ?? 0) > 0) ? `+${campaignsList.length || overview?.campaigns || 0}` : '—'}
+          trend={(campaignsList.length > 0 || (overview?.campaigns ?? 0) > 0) ? 'up' : 'flat'}
           icon={Target}
           accent="text-primary"
-          hint={`${(campaignsQ.data?.filter((c: any) => c.status === 'active') ?? []).length} actives`}
+          hint={`${campaignsList.filter((c: any) => c.status === 'active').length} actives`}
           isLoading={campaignsQ.isLoading && overviewQ.isLoading}
           onClick={() => navigate('/campaigns')}
         />
