@@ -1,0 +1,31 @@
+# Dépendances
+node_modules/
+
+# Builds (root only)
+/dist/
+/build/
+/.next/
+/out/
+
+# APK builds
+dist-apk/
+frontend/android/
+android-sdk/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Fichiers d'environnement
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

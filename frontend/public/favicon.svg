@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!--
+    Zentara — monogramme "Z" premium (Linear / Vercel vibe)
+    Fond noir profond + léger radial + micro-bordure + Z argenté stroked.
+  -->
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="36%" r="92%">
+      <stop offset="0%" stop-color="#14141B"/>
+      <stop offset="60%" stop-color="#08080C"/>
+      <stop offset="100%" stop-color="#030305"/>
+    </radialGradient>
+    <linearGradient id="silver" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="50%" stop-color="#D6DAE2"/>
+      <stop offset="100%" stop-color="#7E8693"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.06"/>
+      <stop offset="42%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background -->
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="116" fill="url(#gloss)"/>
+
+  <!-- micro-bordure premium -->
+  <rect x="1.5" y="1.5" width="509" height="509" rx="114.5"
+        fill="none" stroke="#FFFFFF" stroke-opacity="0.07" stroke-width="1.5"/>
+
+  <!-- monogramme Z — stroke unique, linecap round, linejoin miter (geometric) -->
+  <!-- Top bar: M(160,168) H(360)
+       Diagonal down-left + bottom bar in a single polyline: 160,352 H,352 -->
+  <path d="M 160 168 H 360 L 160 344 H 360"
+        fill="none"
+        stroke="url(#silver)"
+        stroke-width="48"
+        stroke-linecap="round"
+        stroke-linejoin="miter"
+        stroke-miterlimit="6"/>
+
+  <!-- petit carré accent en bas-droite : signature premium -->
+  <rect x="378" y="378" width="34" height="34" rx="6"
+        fill="#E8ECF2" fill-opacity="0.92"/>
+</svg>

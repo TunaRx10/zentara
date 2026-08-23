@@ -1,0 +1,164 @@
+@import "tailwindcss";
+
+/*
+ * Dark navy + neon lime — Zentara v2.
+ *
+ * Fond navy profond #0b0f17, cartes #111521, primary neon lime #94ff01.
+ * Signature visuelle : dégradé lime→green (logo, CTA, titres .gradient-text),
+ * glow lime, glass white/5, accent néon sur tous les éléments interactifs.
+ */
+@theme {
+  --color-background: #0b0f17;
+  --color-foreground: #cdc6ce;
+
+  --color-card: #111521;
+  --color-card-foreground: #cdc6ce;
+
+  --color-popover: #0b0f17;
+  --color-popover-foreground: #cdc6ce;
+
+  --color-primary: #94ff01; /* Neon lime — accent signature */
+  --color-primary-foreground: #0b0f17;
+
+  --color-secondary: #161a24;
+  --color-secondary-foreground: #cdc6ce;
+
+  --color-muted: #161a24;
+  --color-muted-foreground: #8b909a;
+
+  --color-accent: #a3ff2e; /* Lime bright — highlights */
+  --color-accent-foreground: #0b0f17;
+
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+
+  --color-border: #1f2937;
+  --color-input: #161a24;
+  --color-ring: #94ff01; /* Neon lime — bordures focus */
+
+  /* Neon lime scale for Tailwind bg-lime-* / text-lime-* */
+  --color-lime-300: #b8ff5c;
+  --color-lime-400: #a3ff2e;
+  --color-lime-500: #94ff01;
+  --color-lime-600: #7ad600;
+  --color-lime-700: #5fa800;
+  --color-lime-900: #2e5000;
+}
+
+/* Round 130 — anti-flash au boot (fond sombre). On fige directement
+   la couleur de fond sur <html> pour éviter un frame blanc quand
+   l'APK démarre sur Android ou que le SW sert un cache obsolète. */
+html, body { background-color: #0b0f17; color: #cdc6ce; }
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@keyframes gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradient {
+  background-size: 200% auto;
+  animation: gradient 4s linear infinite;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
+  20%, 40%, 60%, 80% { transform: translateX(6px); }
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+.animate-float-slow {
+  animation: float-slow 6s ease-in-out infinite;
+}
+
+/* Neon lime gradient signature */
+.gradient-text {
+  background-image: linear-gradient(90deg, #94ff01, #a3ff2e);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.gradient-border {
+  position: relative;
+}
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 0.5rem;
+  padding: 1px;
+  background: linear-gradient(90deg, #94ff01, #7ad600);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.glow-blue {
+  box-shadow: 0 0 20px rgba(148, 255, 1, 0.25);
+}
+
+.glow-emerald {
+  box-shadow: 0 0 20px rgba(148, 255, 1, 0.25);
+}
+
+.glow-lime {
+  box-shadow: 0 0 24px rgba(148, 255, 1, 0.30);
+}
+
+/* Glassmorphism helper (dark) — KeeLead : white/5 + border white/10 */
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Sparkline (Round 22) — hover behavior sur chaque point.
+   Le dot grossit au hover de son <g> parent pour rendre
+   le tooltip natif (`<title>`) plus lisible.
+   Le hit-area transparent est plus large pour faciliter le mouseover. */
+.spark-point-group {
+  cursor: crosshair;
+}
+.spark-point-group .spark-dot {
+  transition: r 150ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 150ms ease-out;
+}
+.spark-point-group:hover .spark-dot {
+  r: 1.4;
+  opacity: 1;
+}
+.spark-point-group .spark-hit {
+  /* Laisse passer l'event jusqu'au `<g>` parent — le browser prend
+     en compte la zone <circle> fill="transparent" pour le hover natif.
+     Cela rend le tooltip plus facile à déclencher sans grossir le dot. */
+}
+
+/* Smooth scrollbars — KeeLead : thumb neutre */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: #555; }

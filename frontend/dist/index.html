@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" type="image/x-icon" sizes="any" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#06060a" />
+    <meta name="msapplication-TileColor" content="#2563eb" />
+    <!-- Round 71 — anti-stale-cache meta. Le backend sert déjà
+         `Cache-Control: no-store` sur tout, mais on ceinture+bretelles
+         au cas où un proxy CDN ignorerait le header Vary/Origin. -->
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <!-- Round 71 — build watchdog (runs BEFORE React, no React needed).
+         Si le bundle d'un déploiement précédent est encore présent dans
+         le SW caches ou le localStorage, on vide tout + on reload une
+         fois. C'est le « master switch » qui garantit que CHAQUE reload
+         repart d'un état propre. -->
+    <script>
+      (function () {
+        try {
+          var B = '__BUILD_ID__';
+          var BUILD_ID = (window.__BUILD_ID__ || (window.__BUILD_ID__ = String(Date.now()).slice(-10)));
+          var prev = null;
+          try { prev = localStorage.getItem('zh.lastBuildId'); } catch (_e) { /* noop */ }
+          if (prev && prev !== BUILD_ID && sessionStorage.getItem('zh.skippedRecovery') !== '1') {
+            // Wipe everything related to the previous build (Step 1 of 2).
+            try {
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function (regs) {
+                  regs.forEach(function (r) { r.unregister().catch(function () {}); });
+                }).catch(function () {});
+                navigator.serviceWorker.controller &&
+                  navigator.serviceWorker.controller.postMessage({ type: 'CACHE_CLEAR' });
+              }
+              if ('caches' in window) {
+                caches.keys().then(function (keys) {
+                  keys.forEach(function (k) { caches.delete(k).catch(function () {}); });
+                });
+              }
+            } catch (_e) { /* noop */ }
+            // Skip exactly one reload and mark current build.
+            setTimeout(function () {
+              try { sessionStorage.setItem('zh.skippedRecovery', '1'); } catch (_e) {}
+              try { localStorage.setItem('zh.lastBuildId', BUILD_ID); } catch (_e) {}
+              window.location.reload();
+            }, 60);
+          } else {
+            try { localStorage.setItem('zh.lastBuildId', BUILD_ID); } catch (_e) {}
+          }
+        } catch (_e) { /* noop — never block boot */ }
+      })();
+    </script>
+    <title>ZENTARA | Strategic Intelligence</title>
+    <style>
+      /* Round 107 — boot-fallback minimal.
+         Objectif : pas de « page » parasite à l'ouverture. Juste un fond
+         noir uni, le logo Zentara compact (icône Z carrée + wordmark
+         petite, ~14px) au centre, et un point qui pulse subtilement.
+         Le boot-guard.js retire l'élément dès que React monte. */
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #06060a;
+        color: #e2e8f0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        min-height: 100vh;
+      }
+      /* Round 141 — anti-overflow mobile.
+         Tous les conteneurs racine empêchent tout débordement horizontal
+         résiduel (espaces "fantômes" introduits par certains components
+         legacy). Sans cela, certains boutons étaient inaccessibles sur
+         mobile et la scroll-bar horizontale apparaissait. */
+      html { overflow-x: hidden; }
+      body { overflow-x: hidden; overscroll-behavior-y: contain; }
+      #boot-fallback {
+        position: fixed; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 14px; z-index: 9999;
+        background: #06060a;
+        opacity: 1;
+        transition: opacity 250ms ease-out;
+      }
+      #boot-fallback.hide {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #boot-fallback .mark {
+        display: inline-flex; align-items: center; gap: 8px;
+      }
+      #boot-fallback .mark-z {
+        display: inline-flex; align-items: center; justify-content: center;
+        height: 24px; width: 24px;
+        background: #0a0a10; color: #E7C878;
+        border: 1px solid rgba(231, 200, 120, 0.35);
+        border-radius: 6px;
+        font-weight: 900; font-size: 14px;
+        letter-spacing: -0.04em;
+      }
+      #boot-fallback .mark-w {
+        font-weight: 900; font-size: 14px;
+        letter-spacing: -0.02em;
+        color: #f5f5f7;
+      }
+      #boot-fallback .dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: #E7C878;
+        animation: bf-pulse 1.4s ease-in-out infinite;
+      }
+      @keyframes bf-pulse {
+        0%, 100% { opacity: 0.4; }
+        50% { opacity: 1; }
+      }
+      #boot-error {
+        position: fixed; inset: 0;
+        display: none;
+        align-items: center; justify-content: center;
+        padding: 24px;
+        background: rgba(6, 6, 10, 0.96);
+        z-index: 10000;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: #fecaca;
+      }
+      #boot-error.show { display: flex; }
+      #boot-error .card {
+        max-width: 720px;
+        padding: 24px 28px;
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        border-radius: 16px;
+        background: rgba(40, 10, 12, 0.6);
+      }
+      #boot-error h2 {
+        margin: 0 0 12px;
+        color: #ef4444;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+      }
+      #boot-error pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-all;
+        font-size: 12px;
+        line-height: 1.5;
+        color: #fecaca;
+      }
+    </style>
+    <script type="module" crossorigin src="/assets/index-BxW0pc4R.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-hePW80VL.js">
+    <link rel="modulepreload" crossorigin href="/assets/preload-helper-Czpn1I53.js">
+    <link rel="modulepreload" crossorigin href="/assets/client-D7n_dgPz.js">
+    <link rel="modulepreload" crossorigin href="/assets/card-D7w-Oc2Q.js">
+    <link rel="modulepreload" crossorigin href="/assets/dist-C9DQSHG6.js">
+    <link rel="modulepreload" crossorigin href="/assets/definitions-1BFuqc8p.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-DclG6pQf.css">
+  </head>
+  <body>
+    <!-- Boot fallback minimal — visible avant que React rende #root.
+         Round 107 : juste le mark Zentara + un point qui pulse.
+         Aucun gradient bleu, aucun wordmark géant, aucune « page »
+         parasite à l'ouverture. -->
+    <div id="boot-fallback" aria-live="polite">
+      <div class="mark">
+        <span class="mark-z">Z</span>
+        <span class="mark-w">ZENTARA</span>
+      </div>
+      <div class="dot" aria-hidden="true"></div>
+    </div>
+    <!-- Error overlay — visible si window.onerror attrape une exception. -->
+    <div id="boot-error" role="alert">
+      <div class="card">
+        <h2>⚠ Zentara runtime error</h2>
+        <pre id="boot-error-detail"></pre>
+      </div>
+    </div>
+    <!-- Round 107 — le « boot-pending-flag » (toast violet/bleu qui
+         apparaissait après 10s) est supprimé. S'il faut signaler une
+         attente longue, le splash React le fera plus tard. -->
+    <div id="root"></div>
+
+    <!-- Captures globales : si le bundle JS échoue ou throw avant que
+         React affiche #root, le boot-fallback reste visible et les
+         erreurs s'affichent dans #boot-error. React, quand il monte
+         avec succès, retire le fallback via #boot-fallback.classList.add('hide'). -->
+    <!-- Boot-guard : fichier externe (CSP-compliant, pas de inline). Le
+         defer garantit qu'il s'exécute après le parsing HTML, sans bloquer
+         le paint du loader. Voir public/boot-guard.js pour le contenu. -->
+    <script src="/boot-guard.js" defer></script>
+
+  </body>
+</html>

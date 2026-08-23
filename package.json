@@ -1,0 +1,9 @@
+{
+  "name": "zentara",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Zentara — Enterprise Intelligence & Multi-Agent Analysis Platform",
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build"
+  }
+}
