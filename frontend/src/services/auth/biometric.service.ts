@@ -14,21 +14,71 @@
  * Compatibilité web (Vite preview, dev) :
  *  - `isAvailable()` retourne false → on retombe sur le PIN.
  */
-import { BiometricAuth } from '@aparajita/capacitor-biometric-auth';
-import { Capacitor } from '@capacitor/core';
+// Round 146 — Lazy import de Capacitor Biometric.
+// Sur le web (Vercel, navigateur standard), ce module natif n'existe pas
+// et un `import` statique crash l'application entière.
+let _BiometricAuth: any = undefined;
+let _biometricLoadFailed = false;
+
+async function getBiometricAuth() {
+  if (_BiometricAuth !== undefined) return _BiometricAuth;
+  if (_biometricLoadFailed) return null;
+  try {
+    const mod = await import('@aparajita/capacitor-biometric-auth');
+    _BiometricAuth = mod.BiometricAuth;
+    return _BiometricAuth;
+  } catch (_e) {
+    _biometricLoadFailed = true;
+    return null;
+  }
+}
+
+let _Capacitor: any = undefined;
+async function getCapacitor() {
+  if (_Capacitor !== undefined) return _Capacitor;
+  try {
+    const mod = await import('@capacitor/core');
+    _Capacitor = mod.Capacitor;
+    return _Capacitor;
+  } catch (_e) {
+    _Capacitor = null;
+    return null;
+  }
+}
 
 // =====================================================================
 // Helpers
 // =====================================================================
-function isNative(): boolean {
-  // Capacitor expose une API platform detection côté web et natif.
+async function isNativeAsync(): Promise<boolean> {
   try {
-    return Capacitor.isNativePlatform();
-  } catch (_e) {
-    if (typeof window === 'undefined') return false;
+    const Capacitor = await getCapacitor();
+    if (Capacitor?.isNativePlatform) return Capacitor.isNativePlatform();
+  } catch (_e) { /* fallthrough */ }
+  if (typeof window !== 'undefined') {
     const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
-    return cap?.isNativePlatform?.() ?? false;
+    if (cap?.isNativePlatform) return cap.isNativePlatform();
   }
+  return false;
+}
+
+// Cache the native detection
+let _isNative: boolean | null = null;
+async function isNative(): Promise<boolean> {
+  if (_isNative !== null) return _isNative;
+  _isNative = await isNativeAsync();
+  return _isNative;
+}
+
+function isNativeSync(): boolean {
+  if (_isNative !== null) return _isNative;
+  if (typeof window !== 'undefined') {
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    if (cap?.isNativePlatform) {
+      _isNative = cap.isNativePlatform();
+      return _isNative;
+    }
+  }
+  return false;
 }
 
 function randomBase64UrlToken(): string {
@@ -81,10 +131,14 @@ export const biometricService = {
    * Sur web : retourne `available: false` (fallback PIN).
    */
   async checkAvailability(): Promise<BiometricAvailability> {
-    if (!isNative()) {
+    if (!(await isNative())) {
       return { available: false, biometryType: 'None' };
     }
     try {
+      const BiometricAuth = await getBiometricAuth();
+      if (!BiometricAuth) {
+        return { available: false, biometryType: 'None', error: 'Module biométrique non disponible' };
+      }
       const result = await BiometricAuth.checkBiometry();
       return {
         available: !!result.isAvailable,
@@ -106,15 +160,17 @@ export const biometricService = {
    * défaut).
    */
   async isStrong(): Promise<boolean> {
-    if (!isNative()) return false;
+    if (!(await isNative())) return false;
     try {
+      const BiometricAuth = await getBiometricAuth();
+      if (!BiometricAuth) return false;
+      const Capacitor = await getCapacitor();
       // L'API native v10 expose cette méthode sur Android uniquement.
-      const platform = Capacitor.getPlatform();
+      const platform = Capacitor ? Capacitor.getPlatform() : 'web';
       if (platform !== 'android') return true;
       const fn = (BiometricAuth as unknown as { getStrongBiometryIsAvailable?: () => Promise<{ isAvailable?: boolean; value?: boolean }> }).getStrongBiometryIsAvailable;
       if (typeof fn !== 'function') return false;
       const r = await fn.call(BiometricAuth);
-      // Selon la version du plugin, l'un ou l'autre des champs est utilisé.
       return Boolean(r?.isAvailable ?? r?.value);
     } catch (_e) {
       return false;
@@ -124,13 +180,13 @@ export const biometricService = {
   /**
    * Enroll : déclenche le prompt natif (qui valide la présence utilisateur)
    * puis retourne un token aléatoire généré côté device (32 bytes base64url).
-   * Le token sera envoyé au backend au setup pour stocker dans
-   * users.biometric_token.
    */
   async enroll(reason = 'Confirme ton empreinte ou Face ID pour activer Zentara'): Promise<string> {
-    if (!isNative()) {
+    if (!(await isNative())) {
       throw new Error('Biométrie non disponible sur ce device');
     }
+    const BiometricAuth = await getBiometricAuth();
+    if (!BiometricAuth) throw new Error('Module biométrique non disponible');
     await BiometricAuth.authenticate({ reason, allowDeviceCredential: false });
     return randomBase64UrlToken();
   },
@@ -140,10 +196,12 @@ export const biometricService = {
    * succès. N'échoue PAS throws (simplifie le flow côté UI).
    */
   async authenticate(reason = 'Déverrouille Zentara'): Promise<boolean> {
-    if (!isNative()) {
+    if (!(await isNative())) {
       throw new Error('Biométrie non disponible sur ce device');
     }
     try {
+      const BiometricAuth = await getBiometricAuth();
+      if (!BiometricAuth) return false;
       await BiometricAuth.authenticate({ reason, allowDeviceCredential: false });
       return true;
     } catch (_e) {

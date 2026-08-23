@@ -14,38 +14,71 @@
  *   avait bien supprimé. Avec ce fallback, le local delete fonctionne
  *   aussi en mode web → plus de confusion UI.
  */
-import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite';
+// Round 146 — Lazy import de Capacitor SQLite.
+// Sur le web (Vercel, navigateur standard), ces modules natifs n'existent pas
+// et un `import` statique crash l'application entière.
+// On utilise un import dynamique + cache pour ne charger le module natif
+// QUE lorsqu'on détecte une plateforme Capacitor native (iOS/Android).
+type SQLiteTypes = {
+  CapacitorSQLite: any;
+  SQLiteConnection: any;
+  SQLiteDBConnection: any;
+};
+let _sqliteTypes: SQLiteTypes | null = null;
+let _sqliteLoadError = false;
+
+async function loadSQLiteTypes(): Promise<SQLiteTypes | null> {
+  if (_sqliteTypes) return _sqliteTypes;
+  if (_sqliteLoadError) return null;
+  try {
+    const mod = await import('@capacitor-community/sqlite');
+    _sqliteTypes = {
+      CapacitorSQLite: mod.CapacitorSQLite,
+      SQLiteConnection: mod.SQLiteConnection,
+      SQLiteDBConnection: mod.SQLiteDBConnection,
+    };
+    return _sqliteTypes;
+  } catch {
+    _sqliteLoadError = true;
+    return null;
+  }
+}
 
 const DB_NAME = 'zentara_local';
 
 /**
  * Détecte si on tourne dans un contexte Capacitor natif (iOS/Android).
- * En navigateur web (preview/cloudflared/APK web), `window.Capacitor` n'existe
+ * En navigateur web (preview/cloudflared), `window.Capacitor` n'existe
  * pas ou `isNativePlatform()` retourne false.
  */
 function isNativeCapacitor(): boolean {
   try {
     const w = typeof window !== 'undefined' ? (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }) : null;
     if (w?.Capacitor?.isNativePlatform) return w.Capacitor.isNativePlatform();
-    // Fallback : si le module CapacitorSQLite est undefined ou ses natives
-    // manquantes, on bascule sur le shim localStorage.
-    return typeof (CapacitorSQLite as unknown as { createConnection?: unknown })?.createConnection !== 'undefined'
-      && Boolean((window as unknown as { Capacitor?: unknown })?.Capacitor);
+    return false;
   } catch {
     return false;
   }
 }
 
 // =====================================================================
-// Native SQLite path (Capacitor)
+// Native SQLite path (Capacitor) — lazy
 // =====================================================================
 
-let db: SQLiteDBConnection | null = null;
-const sqlite = new SQLiteConnection(CapacitorSQLite);
+let db: any = null;
+let _sqlite: any = null;
+async function getSQLite(): Promise<any> {
+  if (_sqlite) return _sqlite;
+  const types = await loadSQLiteTypes();
+  if (!types) throw new Error('SQLite not available');
+  _sqlite = new types.SQLiteConnection(types.CapacitorSQLite);
+  return _sqlite;
+}
 
-async function openNative(): Promise<SQLiteDBConnection> {
+async function openNative(): Promise<any> {
   if (db) return db;
   try {
+    const sqlite = await getSQLite();
     db = await sqlite.createConnection(DB_NAME, false, 'no-encryption', 1, false);
     await db.open();
     await db.execute('PRAGMA foreign_keys = ON');
@@ -57,7 +90,7 @@ async function openNative(): Promise<SQLiteDBConnection> {
   }
 }
 
-async function migrate(conn: SQLiteDBConnection): Promise<void> {
+async function migrate(conn: any): Promise<void> {
   const res = await conn.query("SELECT name FROM sqlite_master WHERE type='table' AND name='users';");
   if (res.values && res.values.length === 0) {
     console.log('[local-db] Running initial migrations...');
@@ -65,7 +98,7 @@ async function migrate(conn: SQLiteDBConnection): Promise<void> {
   }
 }
 
-async function runInitialMigration(conn: SQLiteDBConnection): Promise<void> {
+async function runInitialMigration(conn: any): Promise<void> {
   const schema = `
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -396,7 +429,7 @@ class LocalStorageDB {
   }
 }
 
-async function openBrowser(): Promise<SQLiteDBConnection> {
+async function openBrowser(): Promise<any> {
   // Cast : notre shim expose la même interface publique que Capacitor
   // (`run`, `query`, `execute`, `open`).
   const shim = new LocalStorageDB();
@@ -414,10 +447,10 @@ async function openBrowser(): Promise<SQLiteDBConnection> {
       localStorage.setItem(LS_PREFIX + '_seeded_tables', JSON.stringify(seedSet));
     }
   }
-  return shim as unknown as SQLiteDBConnection;
+  return shim as unknown as any;
 }
 
-export async function getDatabase(): Promise<SQLiteDBConnection> {
+export async function getDatabase(): Promise<any> {
   if (isNativeCapacitor()) {
     try {
       return await openNative();

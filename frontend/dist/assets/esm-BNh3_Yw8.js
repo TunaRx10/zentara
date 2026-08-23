@@ -1,0 +1,2 @@
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/web-CARZFhFQ.js","assets/dist-qewq74lX.js","assets/rolldown-runtime-hePW80VL.js"])))=>i.map(i=>d[i]);
+import{t as e}from"./preload-helper-Czpn1I53.js";import{i as t}from"./dist-qewq74lX.js";var n=t(`Preferences`,{web:()=>e(()=>import(`./web-CARZFhFQ.js`).then(e=>new e.PreferencesWeb),__vite__mapDeps([0,1,2]))});export{n as Preferences};
