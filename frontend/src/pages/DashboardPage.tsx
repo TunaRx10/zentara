@@ -407,11 +407,11 @@ export function DashboardPage(): React.ReactElement {
     [companies],
   );
   const TOP_DESIGN = React.useMemo(
-    () => [...designCompanies].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 8),
+    () => [...designCompanies].filter(c => c && typeof c === 'object').sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 8),
     [designCompanies],
   );
   const TOP_OTHER = React.useMemo(
-    () => [...otherCompanies].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 8),
+    () => [...otherCompanies].filter(c => c && typeof c === 'object').sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, 8),
     [otherCompanies],
   );
 
@@ -487,6 +487,7 @@ export function DashboardPage(): React.ReactElement {
 
   // ----- Hot prospects (top 5 by score desc, then by created_at desc tiebreak) -----
   const TOP_HOT = (Array.isArray(prospects) ? [...prospects] : [])
+    .filter((p) => p && typeof p === 'object')
     .sort((a, b) => {
       const ds = (b.score ?? 0) - (a.score ?? 0);
       if (ds !== 0) return ds;
@@ -522,14 +523,14 @@ export function DashboardPage(): React.ReactElement {
     createdAt: string;
   }
   const activityItems: ActivityItem[] = [
-    ...signals.map<ActivityItem>((s) => ({
+    ...(Array.isArray(signals) ? signals.map<ActivityItem>((s) => ({
       id: `sig-${s.id}`,
       kind: 'signal',
       title: `${s.entity_name} · ${s.type}`,
       meta: s.content,
       createdAt: s.detected_at ?? '',
-    })),
-    ...prospects.map<ActivityItem>((p) => ({
+    })) : []),
+    ...(Array.isArray(prospects) ? prospects.map<ActivityItem>((p) => ({
       id: `pros-${p.id}`,
       kind: 'prospect',
       title: `${p.first_name} ${p.last_name} added`,
@@ -538,7 +539,7 @@ export function DashboardPage(): React.ReactElement {
         p.email ||
         'New prospect.',
       createdAt: p.created_at ?? '',
-    })),
+    })) : []),
   ]
     .sort((a, b) => toDateMs(b.createdAt) - toDateMs(a.createdAt))
     .slice(0, 8);
@@ -770,7 +771,7 @@ export function DashboardPage(): React.ReactElement {
                 <ul className="md:hidden divide-y divide-border/40">
                   {TOP_HOT.map((p) => {
                     const t: Tier = getTier(p.score);
-                    const initials = `${p.first_name?.[0] ?? '?'}${p.last_name?.[0] ?? ''}`;
+                    const initials = `${typeof p.first_name === 'string' ? p.first_name[0] : '?'}${typeof p.last_name === 'string' ? p.last_name[0] : ''}`;
                     return (
                       <li key={p.id} className="flex items-center gap-3 px-4 py-3">
                         <div
@@ -814,7 +815,7 @@ export function DashboardPage(): React.ReactElement {
                 <tbody>
                   {TOP_HOT.map((p) => {
                     const t: Tier = getTier(p.score);
-                    const initials = `${p.first_name?.[0] ?? '?'}${p.last_name?.[0] ?? ''}`;
+                    const initials = `${typeof p.first_name === 'string' ? p.first_name[0] : '?'}${typeof p.last_name === 'string' ? p.last_name[0] : ''}`;
                     return (
                       <tr
                         key={p.id}
