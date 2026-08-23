@@ -29,3 +29,8 @@ npm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+# Databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
