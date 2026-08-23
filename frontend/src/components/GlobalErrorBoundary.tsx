@@ -30,10 +30,20 @@ export class GlobalErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
+    // 0) Écrit l'erreur dans l'URL pour debug Vercel.
+    try {
+      const msg = encodeURIComponent((error?.message || String(error)).slice(0, 200));
+      window.history.replaceState(null, '', '/?err=' + msg);
+    } catch { /* noop */ }
     // 1) Console — pratique en dev.
     // eslint-disable-next-line no-console
     console.error('[GlobalErrorBoundary] caught:', error, info);
-    // 2) Overlay — visible en prod si le pré-chargement échoue.
+    // 2) Document title — lisible via curl pour debug Vercel.
+    try {
+      const msg = (error?.message || String(error)).slice(0, 120);
+      document.title = '⚠ ' + msg;
+    } catch { /* noop */ }
+    // 3) Overlay — visible en prod si le pré-chargement échoue.
     try {
       const errCard = document.getElementById('boot-error');
       const errDetail = document.getElementById('boot-error-detail');
@@ -65,7 +75,7 @@ export class GlobalErrorBoundary extends React.Component<
               la trace via la console.
             </p>
             <pre className="text-[11px] font-mono whitespace-pre-wrap break-all bg-secondary/40 p-3 rounded-xl max-h-64 overflow-auto text-red-300">
-              {this.state.error.stack || this.state.error.message}
+              {this.state.error?.stack || this.state.error?.message || JSON.stringify(this.state.error, null, 2) || '(unknown error)'}
             </pre>
             <button
               type="button"

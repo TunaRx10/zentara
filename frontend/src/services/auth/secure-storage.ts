@@ -15,7 +15,25 @@
  * à `localStorage`. Si tu cibles un build strictement natif, câbler
  * `@capacitor-community/secure-storage` ou `capacitor-secure-storage-plugin`.
  */
-import { Preferences } from '@capacitor/preferences';
+// Round 145 — @capacitor/preferences est un module natif Capacitor.
+// En contexte web pur (Vercel, navigateur standard), l'import peut
+// échouer ou renvoyer un objet sans les méthodes attendues.
+// On utilise un lazy import pour ne jamais crasher au boot.
+let _Preferences: any = undefined;
+async function getPreferences() {
+  if (_Preferences !== undefined) return _Preferences;
+  try {
+    const mod = await import('@capacitor/preferences');
+    _Preferences = mod.Preferences;
+  } catch (_e) {
+    _Preferences = {
+      get: async () => ({ value: null }),
+      set: async () => {},
+      remove: async () => {},
+    };
+  }
+  return _Preferences;
+}
 
 // =====================================================================
 // In-memory cache (module-level)
@@ -38,14 +56,17 @@ const NATIVE = isNative();
 // Implementations
 // =====================================================================
 async function nativeGet(key: string): Promise<string | null> {
-  const { value } = await Preferences.get({ key });
+  const prefs = await getPreferences();
+  const { value } = await prefs.get({ key });
   return value ?? null;
 }
 async function nativeSet(key: string, value: string): Promise<void> {
-  await Preferences.set({ key, value });
+  const prefs = await getPreferences();
+  await prefs.set({ key, value });
 }
 async function nativeRemove(key: string): Promise<void> {
-  await Preferences.remove({ key });
+  const prefs = await getPreferences();
+  await prefs.remove({ key });
 }
 
 async function webGet(key: string): Promise<string | null> {

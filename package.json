@@ -5,5 +5,9 @@
   "description": "Zentara — Enterprise Intelligence & Multi-Agent Analysis Platform",
   "scripts": {
     "build": "cd frontend && npm install && npm run build"
+  },
+  "devDependencies": {
+    "puppeteer": "^25.8.0",
+    "vercel": "^59.5.0"
   }
 }
