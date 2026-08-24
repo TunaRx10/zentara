@@ -44,7 +44,7 @@ const fail = (code: string, message: string, status = 400): LocalRouteResult => 
 // Si elles échouent, elles sont marquées comme « hors-ligne ».
 let _webSourcesCache: Array<{ source: string; message: string; available: boolean }> | null = null;
 
-const DEFAULT_BACKEND_URL = 'https://mighty-toes-see.loca.lt/api';
+const DEFAULT_BACKEND_URL = 'https://smart-stars-end.loca.lt/api';
 
 function getBackendUrl(): string | null {
   try {
@@ -793,10 +793,11 @@ export async function handleLocalRequest(method: string, path: string, body?: un
         return ok({ engine: 'local', mode, results: [], total: 0, sources: ['local-db'], errors: getOfflineErrors(), companies_created: 0, prospects_created: 0, contacts_created: 0 });
       }
 
-      // Récupérer d'abord les résultats locaux
-      const localResults = searchLocal(query, mode, limit, needs);
+      // Skip local-db si le backend est joignable — résultats 100 % live
+      const useLocal = !_backendReachable;
+      const localResults: any[] = useLocal ? searchLocal(query, mode, limit, needs) : [];
       let webResults: any[] = [];
-      const usedSources: string[] = ['local-db'];
+      const usedSources: string[] = useLocal ? ['local-db'] : [];
       let companiesCreated = 0;
       let prospectsCreated = 0;
       let contactsCreated = 0;

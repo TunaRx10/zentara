@@ -10,6 +10,22 @@ import { SEED } from './seed-data';
 
 const PREFIX = 'zh:emb:';
 const SEEDED_KEY = PREFIX + 'seeded';
+const SEED_VERSION_KEY = PREFIX + 'seedVersion';
+const SEED_VERSION = 'v2-empty'; // bump pour forcer un reset de toutes les données
+
+/** Si la version du seed a changé → wipe complet avant re-seed. */
+function maybeWipeForNewVersion(): void {
+  try {
+    const stored = localStorage.getItem(SEED_VERSION_KEY);
+    if (!stored || stored !== SEED_VERSION) {
+      // Nouvelle version du seed → vider toutes les vieilles données
+      embStore.clear();
+      localStorage.removeItem(SEEDED_KEY);
+      localStorage.setItem(SEED_VERSION_KEY, SEED_VERSION);
+      console.info('[zentara/embedded] seed version bump → wipe complet');
+    }
+  } catch { /* ignore */ }
+}
 
 export type EmbTable =
   | 'users'
@@ -68,6 +84,14 @@ export const embStore = {
   count(t: EmbTable): number {
     return readRows(t).length;
   },
+  /** Vide toutes les tables (reset complet). */
+  clear(): void {
+    if (typeof localStorage === 'undefined') return;
+    const tables: string[] = ['users', 'companies', 'prospects', 'contacts', 'campaigns', 'intelligence', 'emails', 'contracts', 'settings', 'signals', 'breakdowns'];
+    for (const t of tables) {
+      try { localStorage.removeItem(PREFIX + t); } catch { /* ignore */ }
+    }
+  },
 };
 
 export function nowIso(): string {
@@ -91,6 +115,7 @@ export function isSeeded(): boolean {
 /** Seed la base locale une seule fois (première ouverture). */
 export function ensureSeeded(): void {
   if (typeof localStorage === 'undefined') return;
+  maybeWipeForNewVersion();
   if (isSeeded()) return;
   try {
     const src = SEED as any;
