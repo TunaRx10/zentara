@@ -80,6 +80,12 @@ interface EngineStatus {
   engine: string;
   groups: Array<{ id: string; label: string; available: boolean }>;
   modes: Mode[];
+  backend?: { configured: boolean; reachable: boolean; url: string | null };
+}
+
+interface EngineStatusFull extends EngineStatus {
+  _backendChecked: boolean;
+  _linkedinReason: string;
 }
 
 const MODES: Array<{ id: Mode; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }> = [
@@ -112,12 +118,26 @@ export function ZentaraOnePage(): React.ReactElement {
 
   const [running, setRunning] = React.useState(false);
   const [result, setResult] = React.useState<EngineResult | null>(null);
-  const [status, setStatus] = React.useState<EngineStatus | null>(null);
+  const [status, setStatus] = React.useState<EngineStatusFull | null>(null);
 
   React.useEffect(() => {
     getApiClient()
       .get<EngineStatus>(ENDPOINTS.engineStatus)
-      .then(setStatus)
+      .then((s) => {
+        const backend = (s as any).backend ?? { configured: false, reachable: false, url: null };
+        const liGroup = s.groups.find((g) => g.id === 'zentara-people');
+        let linkedinReason = '';
+        if (!backend.configured) {
+          linkedinReason = 'Aucun backend configuré — allez dans Réglages → Backend pour connecter votre serveur Zentara';
+        } else if (!backend.reachable) {
+          linkedinReason = `Backend injoignable à ${backend.url} — vérifiez que le serveur tourne`;
+        } else if (liGroup && !liGroup.available) {
+          linkedinReason = 'Session LinkedIn non configurée sur le backend';
+        } else {
+          linkedinReason = 'Connecté ✓';
+        }
+        setStatus({ ...s, _backendChecked: true, _linkedinReason: linkedinReason });
+      })
       .catch(() => undefined);
   }, []);
 
@@ -152,6 +172,37 @@ export function ZentaraOnePage(): React.ReactElement {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-20 pt-4">
+      {/* Source status indicators */}
+      {status && (
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          {status.groups.map((g) => (
+            <div key={g.id} className="flex items-center gap-1.5">
+              <span className={cn('w-2 h-2 rounded-full', g.available ? 'bg-emerald-500' : 'bg-red-500/60')} />
+              <span className="text-muted-foreground">{g.label}</span>
+              {!g.available && g.id === 'zentara-people' && (
+                <a href="/settings" className="text-primary hover:underline font-bold ml-1">
+                  Connecter →
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* LinkedIn off-line banner */}
+      {status && !status.groups.find((g) => g.id === 'zentara-people')?.available && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-1">
+          <p className="text-sm font-bold text-amber-400 flex items-center gap-2">
+            <AlertTriangle size={14} /> LinkedIn People hors-ligne
+          </p>
+          <p className="text-xs text-muted-foreground">{status._linkedinReason}</p>
+          <p className="text-xs text-muted-foreground">
+            Pour activer LinkedIn : lancez <code className="bg-secondary/40 px-1 rounded text-[11px]">node server.js</code> dans <code className="bg-secondary/40 px-1 rounded text-[11px]">zentara/backend</code>, puis configurez l'URL dans{' '}
+            <a href="/settings" className="text-primary hover:underline font-bold">Réglages → Backend</a>.
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="space-y-3">
         <div className="flex items-center gap-3">

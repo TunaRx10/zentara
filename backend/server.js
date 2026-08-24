@@ -1761,6 +1761,37 @@ api.post('/intelligence/analyze', async (req, res) => {
   }
 });
 
+api.get('/analytics/overview', (_req, res) => {
+  ok(res, {
+    users: count('users'),
+    companies: count('companies'),
+    prospects: count('prospects'),
+    contacts: count('contacts'),
+    campaigns: count('campaigns'),
+    intelligence: count('intelligence'),
+    signals: count('monitoring'),
+    ai_analyses: Number(db.prepare("SELECT COUNT(*) AS c FROM intelligence WHERE provider IS NOT NULL").get().c),
+    monitoring: count('monitoring'),
+  });
+});
+
+api.get('/intelligence/:type/:id/signals', (req, res) => {
+  const type = req.params.type === 'prospect' ? 'prospect' : 'company';
+  const rows = db.prepare('SELECT * FROM monitoring WHERE entity_type = ? AND entity_id = ? ORDER BY detected_at DESC').all(type, req.params.id);
+  ok(res, rows.map((r) => ({
+    id: r.id,
+    entity_type: r.entity_type || null,
+    entity_id: r.entity_id || null,
+    source: r.source || 'unknown',
+    entity_name: entityName(r.entity_type, r.entity_id) || '—',
+    type: r.signal_type || 'signal',
+    content: r.signal || '',
+    confidence: Number(r.confidence || 0),
+    severity: severityFor(r.confidence),
+    detected_at: r.detected_at || r.created_at || nowIso(),
+  })));
+});
+
 // GET /api/intelligence/explain/:type/:id — trace détaillée & reproductibilité.
 // Renvoie les sources sérialisées, le calcul des 50 critères,
 // l'agrégat + les analyses IA successives (et l'input_hash qui les explique).
@@ -3850,7 +3881,9 @@ app.use((err, _req, res, _next) => {
 
 applyRuntimeSettingsToEnv();
 
-app.listen(PORT, '127.0.0.1', () => {
-  console.log(`[server] Zentara backend listening on http://127.0.0.1:${PORT}`);
+const LISTEN_HOST = process.env.LISTEN_HOST || '0.0.0.0';
+app.listen(PORT, LISTEN_HOST, () => {
+  console.log(`[server] Zentara backend listening on http://${LISTEN_HOST}:${PORT}`);
   console.log(`[server] Serving frontend from ${FRONTEND_DIST}`);
+  console.log(`[server] LinkedIn: ${process.env.LINKEDIN_USERNAME ? 'configuré' : 'non configuré (StaffSpy session only)'}`);
 });

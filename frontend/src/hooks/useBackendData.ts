@@ -77,6 +77,20 @@ export function useCompaniesQuery(): UseQueryResult<Company[], Error> {
   });
 }
 
+export function useCompanyQuery(id: string | null | undefined): UseQueryResult<Company, Error> {
+  return useQuery<Company, Error>({
+    queryKey: ['companies', 'detail', id],
+    queryFn: async ({ signal }) => {
+      if (!id) throw new Error('ID required');
+      const api = getApiClient();
+      const raw = await api.get<Company | { data: Company }>(ENDPOINTS.companyById(id), { signal });
+      return ('data' in raw ? raw.data : raw) as Company;
+    },
+    enabled: Boolean(id),
+    staleTime: 30_000,
+  });
+}
+
 // =====================================================================
 // Round 35 — Company prospects + aggregate score
 // =====================================================================

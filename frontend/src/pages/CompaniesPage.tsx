@@ -64,6 +64,7 @@ import {
   CheckCircle2,
   Palette,
   MailPlus,
+  AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -200,11 +201,16 @@ function AddCompanyModal({
   const submit = async () => {
     if (!valid) return;
     try {
+      const locParts = location.split(',').map(s => s.trim());
+      const city = locParts[0] || undefined;
+      const country = locParts[1] || undefined;
+
       await createMut.mutateAsync({
         name: name.trim(),
         sector: sector.trim() || undefined,
         industry: industry.trim() || undefined,
-        location: location.trim() || undefined,
+        city,
+        country,
         website: website.trim() || undefined,
         status: 'active',
         auto_scrape: autoScrape,
@@ -1530,6 +1536,24 @@ export function CompaniesPage(): React.ReactElement {
 
   const PAGER_STEP = 8;
   const { visible: paged, hasMore, showMore, shown, total: filteredTotal } = useShowMore(filtered, PAGER_STEP);
+
+  if (queries.isError) {
+    return (
+      <div className="p-10 text-center space-y-4 bg-card/40 rounded-3xl border border-red-500/20">
+        <AlertCircle size={40} className="mx-auto text-red-500 opacity-60" />
+        <div className="space-y-2">
+          <h2 className="text-xl font-black">Erreur de synchronisation</h2>
+          <p className="text-sm text-muted-foreground">
+            Le backend Zentara ne répond pas ou a renvoyé une erreur.
+            Vérifie ta connexion ou l'URL du backend dans les réglages.
+          </p>
+        </div>
+        <Button onClick={() => queries.refetch()} variant="outline" className="gap-2">
+          <RefreshCw size={14} /> Réessayer
+        </Button>
+      </div>
+    );
+  }
 
   const expandedCompany = React.useMemo(
     () => (Array.isArray(queries.data) ? queries.data : []).find((c) => c.id === expandedId) ?? null,

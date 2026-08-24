@@ -63,6 +63,7 @@ import { ENDPOINTS } from '@/services/api/endpoints';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   useCompaniesQuery,
+  useCompanyQuery,
   useCompanyProspectsQuery,
   useCompanyAggregateScoreQuery,
   useCompanyOutreachSummaryQuery,
@@ -1233,9 +1234,7 @@ export const CompanyDetailPage: React.FC = () => {
   const { companyId } = useParams<{ companyId: string }>();
   const navigate = useNavigate();
 
-  // L'overview est fetché via useCompaniesQuery (cache partagé).
-  const { data: companies = [] } = useCompaniesQuery();
-  const company = companies.find((c) => c.id === decodeURIComponent(companyId ?? ''));
+  const { data: company, isLoading: isCompLoading, isError: isCompError } = useCompanyQuery(companyId);
 
   const { data: aggregate } = useCompanyAggregateScoreQuery(company?.id);
   const { data: prospects = [] } = useCompanyProspectsQuery(company?.id);
@@ -1317,7 +1316,16 @@ export const CompanyDetailPage: React.FC = () => {
     if (reason === 'score_above_threshold') return 'site OK (score ≥ 70)';
     return reason;
   }
-  if (!company) {
+  if (isCompLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+        <p className="text-sm text-muted-foreground animate-pulse">Chargement de la fiche entreprise...</p>
+      </div>
+    );
+  }
+
+  if (isCompError || (!company && !isCompLoading)) {
     return (
       <div className="p-6 md:p-10 max-w-5xl mx-auto">
         <Button onClick={() => navigate('/companies')} variant="ghost" className="mb-6">
@@ -1326,12 +1334,17 @@ export const CompanyDetailPage: React.FC = () => {
         <div className="rounded-2xl border border-border/60 bg-card/40 p-8 text-center">
           <Building2 size={36} className="mx-auto text-muted-foreground opacity-40 mb-3" />
           <h2 className="text-xl font-black mb-2">Entreprise introuvable</h2>
-          <p className="text-sm text-muted-foreground mb-4">L'identifiant <code>{companyId}</code> ne correspond à aucune fiche.</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            {isCompError ? 'Une erreur est survenue lors du chargement.' : `L'identifiant ${companyId} ne correspond à aucune fiche.`}
+          </p>
           <Link to="/companies" className="text-primary text-sm font-bold hover:underline">← Retour à la liste</Link>
         </div>
       </div>
     );
   }
+
+  // Narrow type after loading guard
+  if (!company) return null;
 
   // Besoins détectés (pilotés par les problèmes réels de la fiche).
   const intelSummary = (intelResp.data?.summary ?? null) as string | null;

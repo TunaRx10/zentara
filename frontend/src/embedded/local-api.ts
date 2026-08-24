@@ -753,21 +753,28 @@ export async function handleLocalRequest(method: string, path: string, body?: un
   // ---------- Engine (Zentara One) ----------
   if (a === 'engine') {
     if (b === 'status') {
-      // Background probe du backend (non bloquant pour la première réponse)
-      if (getBackendUrl() && !_backendReachable) {
-        probeBackend().catch(() => {});
+      // Probe du backend (bloquant ici pour donner le vrai statut)
+      if (getBackendUrl()) {
+        await probeBackend();
       }
       const ws = getWebSourceStatus();
+      const linkedinAvailable = ws.find((x) => x.source === 'zentara-people')?.available ?? false;
+      const backendConfigured = getBackendUrl() !== null;
       return ok({
         engine: 'zentara-one',
         groups: [
           { id: 'local', label: 'Base locale (offline)', available: true },
           { id: 'zentara-companies', label: 'Companies (SEC EDGAR)', available: ws.find((x) => x.source === 'zentara-companies')?.available ?? false },
-          { id: 'zentara-people', label: 'People (LinkedIn)', available: ws.find((x) => x.source === 'zentara-people')?.available ?? false },
+          { id: 'zentara-people', label: 'People (LinkedIn)', available: linkedinAvailable },
           { id: 'zentara-local', label: 'Local (OpenStreetMap)', available: ws.find((x) => x.source === 'zentara-local')?.available ?? false },
         ],
         modes: ['all', 'companies', 'people', 'local'],
         mode: 'embedded',
+        backend: {
+          configured: backendConfigured,
+          reachable: _backendReachable,
+          url: backendConfigured ? getBackendUrl() : null,
+        },
       });
     }
     if (b === 'search' && m === 'POST') {
