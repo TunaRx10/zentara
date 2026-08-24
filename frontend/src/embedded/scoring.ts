@@ -16,6 +16,7 @@ import emailTemplatesCjs from './vendor/email-templates.cjs';
 import intelEngineCjs from './vendor/intelligence-engine.cjs';
 import { stableHashObject } from './hash';
 import { genId, nowIso } from './store';
+import { calculateRevenuePotential, formatRevenueForEmail, type CompanyProfile, type ScoreProfile } from './revenue-calculator';
 
 const engine: any = (scoringEngineCjs as { default?: unknown }).default ?? scoringEngineCjs;
 export const templates: any = (emailTemplatesCjs as { default?: unknown }).default ?? emailTemplatesCjs;
@@ -302,11 +303,36 @@ function buildStructuredReport(entity: EntityLike, agg: any, breakdown: any[]): 
     }
   }
 
-  // 4 — IMPACT FINANCIER
+  // 4 — IMPACT FINANCIER (avec calculateur de revenu)
   L.push('');
   L.push('## IMPACT FINANCIER');
-  L.push('Revenu potentiellement non capturé estimé : Estimation impossible avec les données disponibles.');
-  L.push('*Raisonnement :* le moteur embarqué ne dispose ni du trafic, ni du panier moyen, ni du chiffre d’affaires de l’entreprise. Compléter ces données (analyse web / enrichissement) pour chiffrer le levier.');
+  try {
+    const cProfile: CompanyProfile = {
+      name, sector, city: city, country: country, website, email, phone,
+      companySize: String((entity as any).company_size ?? (entity as any).size ?? '').trim() || null,
+      foundedYear: parseYear((entity as any).founded_year ?? (entity as any).year ?? null),
+    };
+    const sProfile: ScoreProfile = {
+      opportunityScore: opp, needScore: need, confidence: conf,
+      strengths: agg.strengths || [], weaknesses: agg.weaknesses || [],
+    };
+    const est = calculateRevenuePotential(cProfile, sProfile);
+    const fm = (n: number) => n.toLocaleString('fr-FR');
+    const fe = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} M€` : n >= 1000 ? `${(n / 1000).toFixed(0)} k€` : `${n} €`;
+    const gainPct = est.projectedMonthlyRevenue > 0 ? Math.round((est.monthlyRevenueUplift / est.projectedMonthlyRevenue) * 100) : 0;
+    L.push(`**Potentiel estimé : +${fe(est.annualRevenueUplift)}/an** (${est.roiMultiple}x ROI, remboursé en ${est.paybackMonths} mois)`);
+    L.push('');
+    L.push('| Métrique | Actuel | Avec Zentara |');
+    L.push('|---|---|---|');
+    L.push(`| Visites/mois | ${fm(est.currentMonthlyVisitors)} | ${fm(est.currentMonthlyVisitors)} |`);
+    L.push(`| Leads/mois | ${fm(est.currentMonthlyLeads)} | **${fm(est.projectedMonthlyLeads)}** (+${Math.round((est.projectedMonthlyLeads / Math.max(1, est.currentMonthlyLeads) - 1) * 100)}%) |`);
+    L.push(`| Deals/mois | ${fm(est.currentMonthlyDeals)} | **${fm(est.projectedMonthlyDeals)}** |`);
+    L.push(`| CA/mois | ${fe(est.currentMonthlyRevenue)} | **${fe(est.projectedMonthlyRevenue)}** |`);
+    L.push('');
+    L.push(`> Hypothèses : ${est.assumptions.slice(0, 2).join('. ')}. Confiance : ${est.confidenceLevel === 'high' ? 'élevée' : est.confidenceLevel === 'medium' ? 'modérée' : 'faible'}.`);
+  } catch {
+    L.push('Revenu potentiellement non capturé estimé : calcul indisponible avec les données actuelles.');
+  }
   L.push('');
 
   // 5 — ESTIMATION PRODUIT & IMPACT
@@ -392,6 +418,35 @@ export interface EmailDraft {
   template_id: string;
 }
 
+const ZENTARA_PRICE = 490;
+
+/** Calcule le potentiel de revenu pour une entité (ou renvoie null si pas assez de données). */
+function tryEstimateRevenue(entity: EntityLike, agg: any): ReturnType<typeof calculateRevenuePotential> | null {
+  try {
+    const cProfile: CompanyProfile = {
+      name: String(entity.name ?? '').trim() || 'cette entreprise',
+      sector: String(entity.sector ?? entity.industry ?? '').trim() || null,
+      city: String(entity.city ?? '').trim() || null,
+      country: String(entity.country ?? '').trim() || null,
+      website: String(entity.website ?? '').trim() || null,
+      email: String(entity.email ?? '').trim() || null,
+      phone: String(entity.phone ?? '').trim() || null,
+      companySize: String((entity as any).company_size ?? (entity as any).size ?? '').trim() || null,
+      foundedYear: parseYear((entity as any).founded_year ?? (entity as any).year ?? null),
+    };
+    const sProfile: ScoreProfile = {
+      opportunityScore: FR(agg.opportunity_score),
+      needScore: FR(agg.need_score),
+      confidence: FR(agg.confidence),
+      strengths: agg.strengths || [],
+      weaknesses: agg.weaknesses || [],
+    };
+    return calculateRevenuePotential(cProfile, sProfile, ZENTARA_PRICE);
+  } catch {
+    return null;
+  }
+}
+
 export function buildEmailDraft(
   entity: EntityLike,
   agg: any,
@@ -411,7 +466,12 @@ export function buildEmailDraft(
   const opp = FR(agg.opportunity_score);
   const conf = FR(agg.confidence);
 
-  // Extraire forces/faiblesses significatives (pas les génériques)
+  // Calculer le potentiel de revenu
+  const est = tryEstimateRevenue(entity, agg);
+  const fm = (n: number) => n.toLocaleString('fr-FR');
+  const fe = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} M€` : n >= 1000 ? `${(n / 1000).toFixed(0)} k€` : `${n} €`;
+
+  // Extraire forces/faiblesses significatives
   const strengths: any[] = agg.strengths ?? [];
   const weaknesses: any[] = agg.weaknesses ?? [];
   const realStrength = strengths.find((s: any) =>
@@ -421,10 +481,10 @@ export function buildEmailDraft(
     !['Aucun email public', 'Aucun téléphone public'].includes(w.label)
   )?.label ?? weaknesses[0]?.label ?? null;
 
-  // Observation 100% personnalisée
+  // Observation personnalisée
   let observation = '';
   if (website && sector && city) {
-    observation = `J'ai parcouru ${website.replace(/^https?:\/\//, '')} — ${name}, ${sector} à ${city}, c'est clair.`;
+    observation = `J'ai parcouru ${website.replace(/^https?:\/\//, '')} — ${name}, ${sector} à ${city}.`;
   } else if (website && sector) {
     observation = `J'ai regardé ${website.replace(/^https?:\/\//, '')} — positionnement ${sector} intéressant.`;
   } else if (website) {
@@ -437,34 +497,51 @@ export function buildEmailDraft(
     observation = `Je m'intéresse à ${name} — votre positionnement m'intrigue.`;
   }
 
-  // Problème détecté (spécifique, pas générique)
-  let problemLine = '';
-  if (realGap && !['Aucun email public', 'Aucun téléphone public'].includes(realGap)) {
-    problemLine = `J'ai noté un point : ${realGap.toLowerCase()}. C'est souvent synonyme de croissance non captée.`;
-  } else if (!email && !phone && website) {
-    problemLine = `Un détail : aucun contact direct accessible depuis ${website.replace(/^https?:\/\//, '')}. Vos prospects doivent chercher — et certains abandonnent.`;
-  } else if (!email && !phone) {
-    problemLine = 'Aucun contact direct trouvé sur vos supports publics — vos prospects passent leur chemin.';
-  } else if (need >= 50) {
-    problemLine = `${name} a un potentiel d'optimisation important sur sa visibilité et sa conversion.`;
-  } else if (website) {
-    problemLine = `Votre site ${website.replace(/^https?:\/\//, '')} est en place, mais il manque un levier de conversion mesurable.`;
-  } else {
-    problemLine = `J'ai identifié quelques angles morts dans votre dispositif commercial.`;
+  // Revenue headline (le cœur du message)
+  let revenueHeadline = '';
+  if (est && est.annualRevenueUplift > 0) {
+    const upliftLabel = fe(est.annualRevenueUplift);
+    revenueHeadline = `Voici le chiffre qui m'a fait vous écrire : d'après nos estimations, ${name} pourrait générer **+${upliftLabel}/an** de revenu additionnel en automatisant sa détection de leads et son outreach.`;
+
+    observation += `\n\n📊 Projection éclair :\n`;
+    observation += `• Actuel : ~${fm(est.currentMonthlyLeads)} leads/mois → ${fm(est.currentMonthlyDeals)} deals → ${fe(est.currentMonthlyRevenue)}/mois\n`;
+    observation += `• Avec Zentara : ~${fm(est.projectedMonthlyLeads)} leads/mois → ${fm(est.projectedMonthlyDeals)} deals → ${fe(est.projectedMonthlyRevenue)}/mois\n`;
+    observation += `• Gain annuel : +${upliftLabel} (ROI ${est.roiMultiple}x, remboursé en ${est.paybackMonths} mois)\n`;
+    observation += `• Hypothèse : ${est.confidenceLevel === 'high' ? 'données vérifiées (confiance élevée)' : est.confidenceLevel === 'medium' ? 'estimation modérée' : 'estimation prudente (données partielles)'}`;
   }
 
-  const consequence = 'Conséquence : des opportunités qualifiées qui passent sans être détectées ni converties.';
+  // Problème
+  let problemLine = '';
+  if (est && est.annualRevenueUplift > 0) {
+    problemLine = `Cette différence vient principalement de leads non détectés et non convertis — le problème n°1 que je vois chez la plupart des ${sector || 'entreprises'} qui n'ont pas encore automatisé leur pipeline.`;
+  } else if (realGap && !['Aucun email public', 'Aucun téléphone public'].includes(realGap)) {
+    problemLine = `J'ai noté un point : ${realGap.toLowerCase()}. C'est souvent synonyme de croissance non captée.`;
+  } else if (!email && !phone && website) {
+    problemLine = `Un détail : aucun contact direct accessible depuis ${website.replace(/^https?:\/\//, '')}. Vos prospects cherchent — certains abandonnent.`;
+  } else if (need >= 50) {
+    problemLine = `${name} a un potentiel d'optimisation important sur la détection et la conversion de leads.`;
+  } else {
+    problemLine = `J'ai identifié quelques angles morts dans le pipeline commercial de ${name}.`;
+  }
+
+  const consequence = est && est.monthlyRevenueUplift > 0
+    ? `Sans automatisation, c'est potentiellement ${fe(est.monthlyRevenueUplift)}/mois qui passent sous les radars.`
+    : 'Des opportunités qualifiées qui passent sans être détectées ni converties.';
 
   let solution = '';
-  if (opp >= 70) {
-    solution = 'Zentara automatise la détection de ces signaux faibles et les transforme en pipeline commercial actionnable en 48h.';
+  if (est && est.roiMultiple >= 3) {
+    solution = `Zentara remplit ce gap : détection automatique de signaux d'achat, scoring intelligent, emails prêts à l'envoi. ROI projeté : ${est.roiMultiple}x sur 12 mois.`;
   } else if (opp >= 50) {
-    solution = 'Zentara analyse, score et priorise vos cibles — automatiquement. Le pipeline se remplit sans effort.';
+    solution = `Zentara automatise la détection de leads, le scoring et les emails d'outreach. Le pipeline se remplit sans effort commercial supplémentaire.`;
   } else {
-    solution = 'Zentara pose les fondations : scoring automatique, emails prêts à l\'envoi, suivi intelligent.';
+    solution = `Zentara pose les fondations : scoring automatique, emails prêts à l'envoi, suivi intelligent. 490€/mois, sans engagement.`;
   }
 
   const ctaUrl = opts.ctaUrl ?? 'https://cal.com/zentara/demo';
+
+  const subjectRevenue = est && est.annualRevenueUplift > 10000
+    ? `${name} → +${fe(est.annualRevenueUplift)}/an ?`
+    : `${name} — un point que nous avons relevé`;
 
   const vars: Record<string, unknown> = {
     recipient_first_name: firstName || undefined,
@@ -473,15 +550,16 @@ export function buildEmailDraft(
     company_name: name,
     company_sector: sector || undefined,
     city: city || undefined,
+    revenue_headline: revenueHeadline,
     observation,
     problem: problemLine,
     consequence,
     solution,
     why_now: need >= 60 ? 'Le marché accélère — les premiers arrivés sur ces sujets prennent l\'avantage.' : 'Maintenant, avant que le marché ne se structure — c\'est le bon timing.',
-    demo_pitch: '15 minutes pour vous montrer concrètement, sur vos données.',
+    demo_pitch: est ? `15 minutes pour vous montrer concrètement comment passer de ${fe(est.currentMonthlyRevenue)} à ${fe(est.projectedMonthlyRevenue)}/mois.` : '15 minutes pour vous montrer concrètement, sur vos données.',
     slot_proposal: 'Disponible cette semaine pour un échange — qu\'est-ce qui vous arrange ?',
     top_finding: realStrength || (website ? website.replace(/^https?:\/\//, '') : name),
-    cta_text: 'Voir ce que ça donne',
+    cta_text: 'Voir la projection complète',
     cta_url: ctaUrl,
     sender_name: opts.senderName ?? 'Tuna',
     sender_role: opts.senderRole ?? 'Fondateur, Zentara',
@@ -496,13 +574,17 @@ export function buildEmailDraft(
     rendered = templates.renderEmailTemplate('outreach_first_touch', vars);
   }
   return {
-    subject: rendered.subject,
+    subject: est && est.annualRevenueUplift > 10000
+      ? `${name} → +${fe(est.annualRevenueUplift)}/an de revenu potentiel`
+      : (rendered.subject || subjectRevenue),
     html: rendered.html,
     body: stripHtml(rendered.html),
     cta_url: ctaUrl,
     template_id: rendered.template?.id ?? templateId,
   };
 }
+
+export { tryEstimateRevenue, parseYear };
 
 function stripHtml(html: string): string {
   return html

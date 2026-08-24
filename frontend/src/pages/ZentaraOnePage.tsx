@@ -26,6 +26,11 @@ import {
   CheckCircle2,
   Layers,
   Tag,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
+  TrendingUp,
+  DollarSign,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -116,6 +121,15 @@ export function ZentaraOnePage(): React.ReactElement {
   const [limit, setLimit] = React.useState(20);
   const [radius, setRadius] = React.useState('');
 
+  // Advanced search criteria
+  const [showAdvanced, setShowAdvanced] = React.useState(false);
+  const [companySize, setCompanySize] = React.useState('');
+  const [revenueRange, setRevenueRange] = React.useState('');
+  const [fundingStage, setFundingStage] = React.useState('');
+  const [techStack, setTechStack] = React.useState('');
+  const [growthSignal, setGrowthSignal] = React.useState('');
+  const [minScore, setMinScore] = React.useState(0);
+
   const [running, setRunning] = React.useState(false);
   const [result, setResult] = React.useState<EngineResult | null>(null);
   const [status, setStatus] = React.useState<EngineStatusFull | null>(null);
@@ -146,7 +160,7 @@ export function ZentaraOnePage(): React.ReactElement {
     setRunning(true);
     setResult(null);
     try {
-      const data = await api.post<EngineResult>(ENDPOINTS.engineSearch, {
+      const payload: any = {
         mode,
         query: query.trim(),
         needs: needs.trim() || undefined,
@@ -155,7 +169,16 @@ export function ZentaraOnePage(): React.ReactElement {
         radius: radius ? Number(radius) : undefined,
         limit,
         save: true,
-      }, { timeoutMs: 120_000 });
+      };
+      // Advanced criteria
+      if (companySize) payload.company_size = companySize;
+      if (revenueRange) payload.revenue_range = revenueRange;
+      if (fundingStage) payload.funding_stage = fundingStage;
+      if (techStack) payload.tech_stack = techStack;
+      if (growthSignal) payload.growth_signal = growthSignal;
+      if (minScore > 0) payload.min_score = minScore;
+
+      const data = await api.post<EngineResult>(ENDPOINTS.engineSearch, payload, { timeoutMs: 120_000 });
       setResult(data);
     } catch (e) {
       toast.error(`Recherche impossible : ${(e as Error).message}`);
@@ -282,6 +305,95 @@ export function ZentaraOnePage(): React.ReactElement {
               </select>
             </div>
           </div>
+
+          {/* Advanced toggle */}
+          <button type="button" onClick={() => setShowAdvanced(!showAdvanced)}
+            className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors">
+            <SlidersHorizontal size={12} />
+            Critères avancés
+            {showAdvanced ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
+
+          {showAdvanced && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-xl border border-border/40 bg-background/40">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+                  <Building2 size={10} /> Taille entreprise
+                </label>
+                <select value={companySize} onChange={(e) => setCompanySize(e.target.value)} className="w-full h-9 rounded-lg border border-border bg-background px-2.5 text-xs">
+                  <option value="">Toutes tailles</option>
+                  <option value="1-10">1-10 employés (micro)</option>
+                  <option value="11-50">11-50 (PME)</option>
+                  <option value="51-200">51-200 (mid-market)</option>
+                  <option value="201-1000">201-1000 (scale-up)</option>
+                  <option value="1001+">1001+ (enterprise)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+                  <DollarSign size={10} /> Revenu estimé
+                </label>
+                <select value={revenueRange} onChange={(e) => setRevenueRange(e.target.value)} className="w-full h-9 rounded-lg border border-border bg-background px-2.5 text-xs">
+                  <option value="">Tous revenus</option>
+                  <option value="0-1M">&lt; 1 M€</option>
+                  <option value="1M-10M">1-10 M€</option>
+                  <option value="10M-50M">10-50 M€</option>
+                  <option value="50M-250M">50-250 M€</option>
+                  <option value="250M+">250 M€+</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+                  <TrendingUp size={10} /> Stade financement
+                </label>
+                <select value={fundingStage} onChange={(e) => setFundingStage(e.target.value)} className="w-full h-9 rounded-lg border border-border bg-background px-2.5 text-xs">
+                  <option value="">Tous stades</option>
+                  <option value="bootstrapped">Bootstrapped</option>
+                  <option value="seed">Seed / Pre-seed</option>
+                  <option value="series-a">Series A</option>
+                  <option value="series-b">Series B</option>
+                  <option value="series-c">Series C+</option>
+                  <option value="public">Public / IPO</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+                  <Globe size={10} /> Stack technique
+                </label>
+                <Input value={techStack} onChange={(e) => setTechStack(e.target.value)} placeholder="React, AWS, Shopify…" className="h-9 text-xs" />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+                  <Rocket size={10} /> Signal de croissance
+                </label>
+                <select value={growthSignal} onChange={(e) => setGrowthSignal(e.target.value)} className="w-full h-9 rounded-lg border border-border bg-background px-2.5 text-xs">
+                  <option value="">Tous signaux</option>
+                  <option value="hiring">Recrute activement</option>
+                  <option value="funding_raised">A levé des fonds récemment</option>
+                  <option value="new_product">Nouveau produit / feature</option>
+                  <option value="expanding">Expansion géographique</option>
+                  <option value="rebranding">Refonte / rebranding</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+                  <CheckCircle2 size={10} /> Score minimum
+                </label>
+                <select value={minScore} onChange={(e) => setMinScore(Number(e.target.value))} className="w-full h-9 rounded-lg border border-border bg-background px-2.5 text-xs">
+                  <option value="0">Tous scores</option>
+                  <option value="40">≥ 40 (basique)</option>
+                  <option value="60">≥ 60 (potentiel)</option>
+                  <option value="75">≥ 75 (qualifié)</option>
+                  <option value="85">≥ 85 (prioritaire)</option>
+                </select>
+              </div>
+            </div>
+          )}
 
           <Button onClick={() => void run()} disabled={running || !query.trim()} className="gap-2">
             {running ? <Loader2 size={16} className="animate-spin" /> : <SearchIcon size={16} />}
