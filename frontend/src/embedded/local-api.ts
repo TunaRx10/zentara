@@ -44,12 +44,15 @@ const fail = (code: string, message: string, status = 400): LocalRouteResult => 
 // Si elles échouent, elles sont marquées comme « hors-ligne ».
 let _webSourcesCache: Array<{ source: string; message: string; available: boolean }> | null = null;
 
+const DEFAULT_BACKEND_URL = 'https://funny-planes-shop.loca.lt/api';
+
 function getBackendUrl(): string | null {
   try {
     const stored = localStorage.getItem('zentara.api.base');
     if (stored && stored.trim().length > 0) return stored.trim().replace(/\/+$/, '');
-    return null;
-  } catch { return null; }
+    // Fallback auto : backend tunnelé hébergé par Zentara
+    return DEFAULT_BACKEND_URL;
+  } catch { return DEFAULT_BACKEND_URL; }
 }
 
 let _backendReachable = false;
