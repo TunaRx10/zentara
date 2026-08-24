@@ -44,7 +44,7 @@ const fail = (code: string, message: string, status = 400): LocalRouteResult => 
 // Si elles échouent, elles sont marquées comme « hors-ligne ».
 let _webSourcesCache: Array<{ source: string; message: string; available: boolean }> | null = null;
 
-const DEFAULT_BACKEND_URL = 'https://funny-planes-shop.loca.lt/api';
+const DEFAULT_BACKEND_URL = 'https://mighty-toes-see.loca.lt/api';
 
 function getBackendUrl(): string | null {
   try {
