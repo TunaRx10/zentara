@@ -44,7 +44,7 @@ const fail = (code: string, message: string, status = 400): LocalRouteResult => 
 // Si elles échouent, elles sont marquées comme « hors-ligne ».
 let _webSourcesCache: Array<{ source: string; message: string; available: boolean }> | null = null;
 
-const DEFAULT_BACKEND_URL = 'https://smart-stars-end.loca.lt/api';
+const DEFAULT_BACKEND_URL = 'https://lucky-seas-think.loca.lt/api';
 
 function getBackendUrl(): string | null {
   try {
@@ -793,21 +793,21 @@ export async function handleLocalRequest(method: string, path: string, body?: un
         return ok({ engine: 'local', mode, results: [], total: 0, sources: ['local-db'], errors: getOfflineErrors(), companies_created: 0, prospects_created: 0, contacts_created: 0 });
       }
 
-      // Skip local-db si le backend est joignable — résultats 100 % live
-      const useLocal = !_backendReachable;
-      const localResults: any[] = useLocal ? searchLocal(query, mode, limit, needs) : [];
+      // Skip local-db TOUJOURS (seed est vide). Cherche live uniquement.
+      const localResults: any[] = [];
       let webResults: any[] = [];
-      const usedSources: string[] = useLocal ? ['local-db'] : [];
+      let usedSources: string[] = [];
       let companiesCreated = 0;
       let prospectsCreated = 0;
       let contactsCreated = 0;
 
-      // Ajouter les recherches web directes (navigateur → APIs publiques)
-      const doWeb = mode === 'all' || mode === 'companies' || mode === 'local';
+      // Toujours chercher en live (APIs directes navigateur)
+      const doWeb = true;
+      const effectiveQuery = query || needs;
 
-      if (doWeb && (query || location)) {
-        // --- OSM / Overpass (Local) ---
-        if (mode === 'all' || mode === 'local') {
+      if (doWeb && (effectiveQuery || location)) {
+        // --- OSM / Overpass (Local) — toujours pour tout mode ---
+        if (effectiveQuery || location) {
           try {
             let lat: number | undefined;
             let lon: number | undefined;
@@ -823,7 +823,7 @@ export async function handleLocalRequest(method: string, path: string, body?: un
             }
 
             if (lat != null && lon != null) {
-              const osmResults = await searchOverpass(query || 'office', lat, lon, radiusKm * 1000, Math.ceil(limit / 2));
+              const osmResults = await searchOverpass(effectiveQuery || 'office', lat, lon, radiusKm * 1000, Math.ceil(limit / 2));
               for (const r of osmResults) {
                 // Éviter les doublons avec les résultats locaux
                 const dup = localResults.find((lr) => lr.name?.toLowerCase() === r.name.toLowerCase());
@@ -858,8 +858,8 @@ export async function handleLocalRequest(method: string, path: string, body?: un
           }
         }
 
-        // --- SEC EDGAR (Companies) ---
-        if (mode === 'all' || mode === 'companies') {
+        // --- SEC EDGAR (Companies) — toujours pour tout mode ---
+        if (effectiveQuery) {
           try {
             // Cherche par nom ou ticker
             const edgarQuery = query || needs;
