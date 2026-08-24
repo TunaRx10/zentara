@@ -1,22 +1,35 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <!--
-    Zentara — monogramme "Z" premium (Linear / Vercel vibe)
-    Fond noir profond + léger radial + micro-bordure + Z argenté stroked.
-  -->
+  <!-- Zentara — monogramme Z premium neon lime -->
   <defs>
-    <radialGradient id="bg" cx="50%" cy="36%" r="92%">
-      <stop offset="0%" stop-color="#14141B"/>
-      <stop offset="60%" stop-color="#08080C"/>
-      <stop offset="100%" stop-color="#030305"/>
+    <radialGradient id="bg" cx="50%" cy="40%" r="90%">
+      <stop offset="0%" stop-color="#121626"/>
+      <stop offset="55%" stop-color="#0b0f17"/>
+      <stop offset="100%" stop-color="#060810"/>
     </radialGradient>
-    <linearGradient id="silver" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFFFFF"/>
-      <stop offset="50%" stop-color="#D6DAE2"/>
-      <stop offset="100%" stop-color="#7E8693"/>
+    <linearGradient id="zGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#7ad600"/>
+      <stop offset="30%" stop-color="#94ff01"/>
+      <stop offset="70%" stop-color="#a3ff2e"/>
+      <stop offset="100%" stop-color="#b8ff5c"/>
     </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
     <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.06"/>
-      <stop offset="42%" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.04"/>
+      <stop offset="45%" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
   </defs>
 
@@ -24,22 +37,27 @@
   <rect width="512" height="512" rx="116" fill="url(#bg)"/>
   <rect width="512" height="512" rx="116" fill="url(#gloss)"/>
 
-  <!-- micro-bordure premium -->
+  <!-- premium border -->
   <rect x="1.5" y="1.5" width="509" height="509" rx="114.5"
-        fill="none" stroke="#FFFFFF" stroke-opacity="0.07" stroke-width="1.5"/>
+        fill="none" stroke="#94ff01" stroke-opacity="0.08" stroke-width="1.5"/>
 
-  <!-- monogramme Z — stroke unique, linecap round, linejoin miter (geometric) -->
-  <!-- Top bar: M(160,168) H(360)
-       Diagonal down-left + bottom bar in a single polyline: 160,352 H,352 -->
-  <path d="M 160 168 H 360 L 160 344 H 360"
-        fill="none"
-        stroke="url(#silver)"
-        stroke-width="48"
-        stroke-linecap="round"
-        stroke-linejoin="miter"
-        stroke-miterlimit="6"/>
+  <!-- Z glow layer -->
+  <path d="M 148 164 H 364 L 148 348 H 364"
+        fill="none" stroke="#94ff01" stroke-width="44"
+        stroke-linecap="round" stroke-linejoin="miter" stroke-miterlimit="6"
+        opacity="0.25" filter="url(#glow)"/>
 
-  <!-- petit carré accent en bas-droite : signature premium -->
-  <rect x="378" y="378" width="34" height="34" rx="6"
-        fill="#E8ECF2" fill-opacity="0.92"/>
+  <!-- Z main -->
+  <path d="M 148 164 H 364 L 148 348 H 364"
+        fill="none" stroke="url(#zGrad)" stroke-width="44"
+        stroke-linecap="round" stroke-linejoin="miter" stroke-miterlimit="6"/>
+
+  <!-- Z inner highlight -->
+  <path d="M 148 164 H 364 L 148 348 H 364"
+        fill="none" stroke="#c4ff7a" stroke-width="8"
+        stroke-linecap="round" stroke-linejoin="miter" stroke-miterlimit="6"
+        opacity="0.45" transform="translate(-4, -6)"/>
+
+  <!-- accent dot bottom-right -->
+  <circle cx="378" cy="378" r="14" fill="#94ff01" opacity="0.9" filter="url(#softGlow)"/>
 </svg>

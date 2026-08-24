@@ -1,12 +1,12 @@
 {
   "name": "Zentara",
   "short_name": "Zentara",
-  "description": "Strategic intelligence platform",
+  "description": "Enterprise Intelligence & Multi-Agent Analysis Engine",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0b0f17",
   "theme_color": "#0b0f17",
-  "orientation": "portrait",
+  "orientation": "any",
   "icons": [
     {
       "src": "/favicon.svg",
@@ -25,6 +25,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }
