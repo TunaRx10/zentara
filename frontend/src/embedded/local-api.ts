@@ -44,15 +44,16 @@ const fail = (code: string, message: string, status = 400): LocalRouteResult => 
 // Si elles échouent, elles sont marquées comme « hors-ligne ».
 let _webSourcesCache: Array<{ source: string; message: string; available: boolean }> | null = null;
 
-const DEFAULT_BACKEND_URL = 'https://lucky-seas-think.loca.lt/api';
+const DEFAULT_BACKEND_URL: string = ''; // Configurable via Settings → Backend
 
 function getBackendUrl(): string | null {
   try {
     const stored = localStorage.getItem('zentara.api.base');
     if (stored && stored.trim().length > 0) return stored.trim().replace(/\/+$/, '');
-    // Fallback auto : backend tunnelé hébergé par Zentara
-    return DEFAULT_BACKEND_URL;
-  } catch { return DEFAULT_BACKEND_URL; }
+    const def = String(DEFAULT_BACKEND_URL || '').trim();
+    if (def.length > 0) return def.replace(/\/+$/, '');
+    return null;
+  } catch { return null; }
 }
 
 let _backendReachable = false;
@@ -920,16 +921,16 @@ export async function handleLocalRequest(method: string, path: string, body?: un
         }
       }
 
-      // --- Backend proxy (LinkedIn People) ---
-      // Si un backend Zentara est configuré et joignable, on lui délègue
-      // aussi la recherche pour obtenir les résultats LinkedIn (StaffSpy).
+      // --- Backend proxy (LinkedIn People) — NON BLOQUANT (timeout 8s) ---
       let backendResults: any[] = [];
       if (getBackendUrl()) {
         try {
           const backendPayload: any = { mode, query: query || undefined, needs: needs || undefined, roles: needs || undefined, location: location || undefined, radius: radiusKm || undefined, limit: Math.ceil(limit * 1.5), save: false };
-          const backendData = await fetchBackendSearch(backendPayload);
+          const backendData = await Promise.race([
+            fetchBackendSearch(backendPayload),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+          ]);
           if (backendData && Array.isArray(backendData.results)) {
-            // Le backend renvoie déjà des hits au même format
             for (const bh of backendData.results) {
               const dup = webResults.concat(localResults).find((lr) => {
                 const bn = (bh.name ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -964,7 +965,9 @@ export async function handleLocalRequest(method: string, path: string, body?: un
                 if (!usedSources.includes(s)) usedSources.push(s);
               }
             }
-            // Marquer LinkedIn comme disponible
+          }
+          // Marquer LinkedIn comme available si on a eu des résultats
+          if (backendResults.length > 0) {
             const peopleSrc = getWebSourceStatus().find((s) => s.source === 'zentara-people');
             if (peopleSrc) peopleSrc.available = true;
           }
