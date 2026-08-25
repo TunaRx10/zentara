@@ -44,7 +44,7 @@ const fail = (code: string, message: string, status = 400): LocalRouteResult => 
 // Si elles échouent, elles sont marquées comme « hors-ligne ».
 let _webSourcesCache: Array<{ source: string; message: string; available: boolean }> | null = null;
 
-const DEFAULT_BACKEND_URL: string = 'https://melissa-regime-papua-armor.trycloudflare.com/api'; // Cloudflare tunnel H24
+const DEFAULT_BACKEND_URL = ''; // pas de backend par défaut — la recherche est 100% autonome (SEC EDGAR + OSM directs)
 
 function getBackendUrl(): string | null {
   try {
@@ -80,7 +80,7 @@ async function fetchBackendSearch(payload: any): Promise<any | null> {
   if (!base) return null;
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 25_000);
+    const timer = setTimeout(() => ctrl.abort(), 8_000);
     const res = await fetch(`${base}/engine/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -794,35 +794,34 @@ export async function handleLocalRequest(method: string, path: string, body?: un
         return ok({ engine: 'local', mode, results: [], total: 0, sources: [], errors: getOfflineErrors(), companies_created: 0, prospects_created: 0, contacts_created: 0 });
       }
 
-      // 1. BACKEND PRIORITY (42 sources + LinkedIn via tunnel)
+      // 1. BACKEND (bonus : LinkedIn + 42 sources) — probe rapide avant d'essayer.
+      //    Si le backend est mort, on va directement au fallback SEC+OSM (0 attente).
       let results: any[] = [];
       let usedSources: string[] = [];
       const backendUrl = getBackendUrl();
 
       if (backendUrl) {
-        try {
-          const bp: any = { mode, query: query || undefined, needs: needs || undefined, roles: needs || undefined, location: location || undefined, radius: radiusKm || undefined, limit, save: false };
-          const resp = await Promise.race([
-            fetchBackendSearch(bp),
-            new Promise<any>(r => setTimeout(() => r(null), 25_000)),
-          ]);
-          if (resp && Array.isArray(resp.results) && resp.results.length > 0) {
-            results = resp.results.map((bh: any) => ({
-              id: bh.id ?? 'be-' + Math.random().toString(36).slice(2, 10),
-              type: bh.type ?? 'company', name: bh.name, title: bh.title ?? null,
-              category: bh.category ?? null, city: bh.city ?? null, country: bh.country ?? null,
-              website: bh.website ?? null, email: bh.email ?? null, phone: bh.phone ?? null,
-              linkedin: bh.linkedin ?? null,
-              source: bh.source ?? 'backend', sourceGroup: bh.sourceGroup ?? bh.source ?? 'backend',
-              confidence: bh.confidence ?? 0.9, score: bh.score ?? 65,
-              tags: bh.tags ?? [], company_id: bh.company_id ?? null, company_created: false,
-            }));
-            usedSources = (resp.sources || []).slice();
-            // Mark LinkedIn available
-            const ps = getWebSourceStatus().find(s => s.source === 'zentara-people');
-            if (ps) ps.available = true;
-          }
-        } catch (e) { console.warn('[engine] backend:', e); }
+        // Probe rapide : on teste si le backend répond en 4s max.
+        const alive = await probeBackend();
+        if (alive) {
+          try {
+            const bp: any = { mode, query: query || undefined, needs: needs || undefined, roles: needs || undefined, location: location || undefined, radius: radiusKm || undefined, limit, save: false };
+            const resp = await fetchBackendSearch(bp);
+            if (resp && Array.isArray(resp.results) && resp.results.length > 0) {
+              results = resp.results.map((bh: any) => ({
+                id: bh.id ?? 'be-' + Math.random().toString(36).slice(2, 10),
+                type: bh.type ?? 'company', name: bh.name, title: bh.title ?? null,
+                category: bh.category ?? null, city: bh.city ?? null, country: bh.country ?? null,
+                website: bh.website ?? null, email: bh.email ?? null, phone: bh.phone ?? null,
+                linkedin: bh.linkedin ?? null,
+                source: bh.source ?? 'backend', sourceGroup: bh.sourceGroup ?? bh.source ?? 'backend',
+                confidence: bh.confidence ?? 0.9, score: bh.score ?? 65,
+                tags: bh.tags ?? [], company_id: bh.company_id ?? null, company_created: false,
+              }));
+              usedSources = (resp.sources || []).slice();
+            }
+          } catch (e) { console.warn('[engine] backend:', e); }
+        }
       }
 
       // 2. FALLBACK: SEC EDGAR + OSM direct (browser) if backend returned nothing
