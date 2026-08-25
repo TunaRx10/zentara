@@ -1,5 +1,5 @@
 {
-  "outputDirectory": "frontend/dist",
+  "outputDirectory": "dist",
   "rewrites": [
     { "source": "/((?!api/|assets/|favicon|manifest|sw.js|boot-guard.js).*)", "destination": "/index.html" }
   ]

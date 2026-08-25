@@ -44,7 +44,7 @@ const fail = (code: string, message: string, status = 400): LocalRouteResult => 
 // Si elles échouent, elles sont marquées comme « hors-ligne ».
 let _webSourcesCache: Array<{ source: string; message: string; available: boolean }> | null = null;
 
-const DEFAULT_BACKEND_URL = 'https://murphy-players-beings-learned.trycloudflare.com/api'; // Backend 39 sources (companies <5s)
+const DEFAULT_BACKEND_URL = 'https://zentara-backend.onrender.com/api'; // Backend 39 sources (Render, 24/7)
 
 function getBackendUrl(): string | null {
   try {
@@ -63,7 +63,7 @@ async function probeBackend(): Promise<boolean> {
   if (!base) { _backendReachable = false; return false; }
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const timer = setTimeout(() => ctrl.abort(), 10000);
     const r = await fetch(`${base}/health`, { signal: ctrl.signal });
     clearTimeout(timer);
     _backendReachable = r.ok;
@@ -80,7 +80,7 @@ async function fetchBackendSearch(payload: any): Promise<any | null> {
   if (!base) return null;
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 16_000);
+    const timer = setTimeout(() => ctrl.abort(), 25_000);
     const res = await fetch(`${base}/engine/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
