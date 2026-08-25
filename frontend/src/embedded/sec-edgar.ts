@@ -1,12 +1,13 @@
 /**
- * sec-edgar.ts — Client SEC EDGAR API direct depuis le navigateur.
+ * sec-edgar.ts — Client SEC EDGAR (v2) direct depuis le navigateur.
  *
- * Utilise l'API publique SEC EDGAR (https://efts.sec.gov/) pour rechercher
- * des entreprises enregistrées aux États-Unis. Gratuit, pas de clé requise.
+ * Stratégie : API EDGAR Full-Text Search (efts.sec.gov) d'abord (CORS ✓, rapide),
+ * puis enrichissement des résultats avec submissions SEC par CIK.
  *
  * Docs : https://www.sec.gov/edgar/sec-api-documentation
- * Rate limit : 10 req/s (User-Agent requis).
+ * Rate limit : 10 req/s (User-Agent obligatoire).
  */
+'use strict';
 
 export interface EDGARCompany {
   cik: string;
@@ -17,13 +18,13 @@ export interface EDGARCompany {
   city: string | null;
   state: string | null;
   country: string;
-  website: null; // EDGAR ne fournit pas de site web directement
+  website: null;
   email: null;
   source: string;
   confidence: number;
 }
 
-interface EDGARTickerResult {
+interface EDGARTickerEntry {
   cik_str: number;
   ticker: string;
   title: string;
@@ -31,216 +32,223 @@ interface EDGARTickerResult {
 
 interface EDGARSubmissions {
   cik: string;
-  entityType: string;
+  name: string;
   sic: string;
   sicDescription: string;
-  name: string;
   tickers: string[];
   exchanges: string[];
   addresses?: {
-    mailing?: { city?: string; stateOrCountry?: string; zipCode?: string };
-    business?: { city?: string; stateOrCountry?: string; zipCode?: string };
+    mailing?: { city?: string; stateOrCountry?: string };
+    business?: { city?: string; stateOrCountry?: string };
   };
 }
 
-const USER_AGENT = 'Zentara/1.0 (webapp; contact@zentara.dev)';
+const UA = 'Zentara/1.0 (tunation.fr@gmail.com)';
 
-const SIC_TO_SECTOR: Record<string, string> = {
-  '73': 'Technology / Software',
-  '737': 'Technology / Software',
-  '7370': 'Technology / Software',
-  '7371': 'Technology / Software',
-  '7372': 'Technology / Software',
-  '7373': 'Technology / Software',
-  '7374': 'Technology / Software',
-  '60': 'Finance / Banking',
-  '602': 'Finance / Banking',
-  '603': 'Finance / Banking',
-  '61': 'Finance / Banking',
-  '62': 'Finance / Banking',
-  '63': 'Insurance',
-  '64': 'Insurance',
-  '65': 'Real Estate',
-  '67': 'Finance / Holding',
-  '28': 'Chemicals / Pharma',
-  '283': 'Pharma / Biotech',
-  '2834': 'Pharma',
-  '2836': 'Biotech',
-  '35': 'Industrial / Manufacturing',
-  '36': 'Electronics',
-  '367': 'Semiconductors',
-  '3674': 'Semiconductors',
-  '38': 'Instruments / Medical',
-  '384': 'Medical Devices',
-  '3845': 'Medical Devices',
-  '48': 'Telecom',
-  '481': 'Telecom',
-  '4813': 'Telecom',
-  '49': 'Utilities / Energy',
-  '50': 'Wholesale',
-  '51': 'Wholesale',
-  '52': 'Retail',
-  '53': 'Retail',
-  '54': 'Retail',
-  '55': 'Automotive',
-  '56': 'Apparel',
-  '57': 'Retail',
-  '58': 'Restaurants / Food',
-  '581': 'Restaurants',
-  '5812': 'Restaurants',
-  '59': 'Retail',
-  '70': 'Hospitality',
-  '701': 'Hotels',
-  '72': 'Services',
-  '78': 'Entertainment',
-  '781': 'Entertainment',
-  '79': 'Entertainment',
-  '80': 'Healthcare',
-  '801': 'Healthcare',
-  '82': 'Education',
-  '87': 'Consulting / Services',
-  '874': 'Consulting',
-  '8741': 'Consulting',
+const SIC_MAP: Record<string, string> = {
+  '73':'Technology / Software','737':'Technology / Software','7370':'SaaS / Software','7371':'Software Consulting',
+  '7372':'Enterprise Software','7373':'SaaS / Cloud','60':'Finance / Banking','602':'Banking','61':'Finance',
+  '62':'Trading / Brokerage','63':'Insurance','64':'Insurance','65':'Real Estate',
+  '28':'Chemicals / Pharma','283':'Pharma / Biotech','2834':'Pharma','2836':'Biotech',
+  '35':'Industrial','36':'Electronics','367':'Semiconductors','3674':'Semiconductors',
+  '38':'Medical Instruments','384':'Medical Devices','48':'Telecom','481':'Telecom',
+  '80':'Healthcare','801':'Healthcare Services','82':'Education','87':'Consulting','874':'Consulting',
 };
 
-function sicToSector(sic: string | null | undefined): string | null {
+function sicToSector(sic: string | null): string | null {
   if (!sic) return null;
-  // Commence par les préfixes les plus longs
-  const keys = Object.keys(SIC_TO_SECTOR).sort((a, b) => b.length - a.length);
-  for (const k of keys) {
-    if (sic.startsWith(k)) return SIC_TO_SECTOR[k];
-  }
+  const keys = Object.keys(SIC_MAP).sort((a, b) => b.length - a.length);
+  for (const k of keys) { if (sic.startsWith(k)) return SIC_MAP[k]; }
   return null;
 }
 
-/** Télécharge le mapping ticker→CIK (fichier JSON complet, ~2MB). Mis en cache 1h. */
-let tickerCache: { data: Record<string, EDGARTickerResult> | null; ts: number } = { data: null, ts: 0 };
+// ---- Ticker mapping (2MB, mise en cache 6h) ----
 
-async function fetchTickerMapping(): Promise<Record<string, EDGARTickerResult>> {
+let _tickerMap: Record<string, EDGARTickerEntry> | null = null;
+let _tickerTs = 0;
+
+async function loadTickerMap(): Promise<Record<string, EDGARTickerEntry>> {
   const now = Date.now();
-  if (tickerCache.data && (now - tickerCache.ts) < 3_600_000) {
-    return tickerCache.data;
-  }
+  // Cache 6h en mémoire (le fetch prend ~2s sur une bonne connexion)
+  if (_tickerMap && (now - _tickerTs) < 21_600_000) return _tickerMap;
+
+  // Essayer le cache localStorage d'abord
+  try {
+    const cached = localStorage.getItem('zsec.tickers');
+    const cachedTs = Number(localStorage.getItem('zsec.tickersTs') || '0');
+    if (cached && (now - cachedTs) < 3_600_000) {
+      _tickerMap = JSON.parse(cached);
+      _tickerTs = cachedTs;
+      return _tickerMap!;
+    }
+  } catch { /* noop */ }
+
   const res = await fetch('https://www.sec.gov/files/company_tickers.json', {
-    headers: { 'User-Agent': USER_AGENT },
+    headers: { 'User-Agent': UA },
+    signal: AbortSignal.timeout(15_000),
   });
-  if (!res.ok) throw new Error(`SEC ticker fetch HTTP ${res.status}`);
-  const raw = await res.json();
-  // Convertit { "0": {cik_str, ticker, title}, ... } → { TICKER: {cik_str, ticker, title}, ... }
-  const map: Record<string, EDGARTickerResult> = {};
-  for (const v of Object.values(raw) as EDGARTickerResult[]) {
+  if (!res.ok) throw new Error(`SEC tickers HTTP ${res.status}`);
+  const raw: Record<string, EDGARTickerEntry> = await res.json();
+
+  const map: Record<string, EDGARTickerEntry> = {};
+  for (const v of Object.values(raw)) {
     if (v.ticker) map[v.ticker.toUpperCase()] = v;
   }
-  tickerCache = { data: map, ts: now };
+  _tickerMap = map;
+  _tickerTs = now;
+
+  // Cache localStorage
+  try { localStorage.setItem('zsec.tickers', JSON.stringify(map)); localStorage.setItem('zsec.tickersTs', String(now)); } catch { /* noop */ }
+
   return map;
 }
 
-/** Recherche une entreprise par ticker (ex: AAPL, MSFT, GOOGL). */
+function cikToPadded(cik: number | string): string {
+  return String(Number(cik)).padStart(10, '0');
+}
+
+/** Enrichit une entrée ticker avec les détails submissions SEC (secteur, ville, etc.). */
+async function enrichWithSubmissions(r: EDGARCompany): Promise<EDGARCompany> {
+  try {
+    const res = await fetch(`https://data.sec.gov/submissions/CIK${r.cik}.json`, {
+      headers: { 'User-Agent': UA },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return r;
+    const sub: EDGARSubmissions = await res.json();
+    r.name = sub.name || r.name;
+    r.ticker = sub.tickers?.[0] || r.ticker;
+    r.exchange = sub.exchanges?.[0] || null;
+    r.sector = sicToSector(sub.sic) || sub.sicDescription || null;
+    r.city = sub.addresses?.business?.city || sub.addresses?.mailing?.city || null;
+    r.state = sub.addresses?.business?.stateOrCountry || sub.addresses?.mailing?.stateOrCountry || null;
+    r.country = 'US';
+    r.confidence = 0.85;
+  } catch { /* keep base data */ }
+  return r;
+}
+
+// =====================================================================
+// API publique : recherche
+// =====================================================================
+
+/**
+ * Recherche rapide via EDGAR Full-Text Search (CORS ✓).
+ * Renvoie les résultats immédiatement, puis les enrichit en arrière-plan.
+ */
+export async function searchEDGAR(query: string, limit = 10): Promise<EDGARCompany[]> {
+  const q = String(query || '').trim();
+  if (!q || q.length < 2) return [];
+
+  try {
+    // 1. EDGAR Full-Text Search (rapide, CORS ✓)
+    const searchUrl = new URL('https://efts.sec.gov/LATEST/search-index');
+    searchUrl.searchParams.set('q', q);
+    searchUrl.searchParams.set('pageSize', String(Math.min(limit * 5, 100)));
+    searchUrl.searchParams.set('startDate', '2023-01-01');
+    searchUrl.searchParams.set('forms', '10-K,10-Q,8-K,S-1');
+
+    const res = await fetch(searchUrl, {
+      headers: { 'User-Agent': UA },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!res.ok) throw new Error(`SEC efts HTTP ${res.status}`);
+
+    const data = await res.json();
+    const hits: Array<{ _source?: { ciks?: string[]; display_name?: string } }> = data?.hits?.hits || [];
+
+    // 2. Regrouper par CIK unique
+    const seen = new Set<string>();
+    const companies: EDGARCompany[] = [];
+
+    for (const h of hits) {
+      const ciks = h._source?.ciks || [];
+      for (const rawCik of ciks) {
+        const cik = cikToPadded(rawCik);
+        if (seen.has(cik)) continue;
+        seen.add(cik);
+
+        companies.push({
+          cik,
+          name: h._source?.display_name || `Company ${cik}`,
+          ticker: null, exchange: null, sector: null,
+          city: null, state: null, country: 'US',
+          website: null, email: null,
+          source: 'sec-edgar',
+          confidence: 0.5,
+        });
+
+        if (companies.length >= limit) break;
+      }
+      if (companies.length >= limit) break;
+    }
+
+    // 3. Essayer de résoudre ticker + nom via le mapping (optionnel, async, best-effort)
+    loadTickerMap().then(async (map) => {
+      for (const c of companies) {
+        // Chercher par CIK dans le mapping
+        const cikNum = Number(c.cik);
+        for (const [ticker, entry] of Object.entries(map)) {
+          if (entry.cik_str === cikNum) {
+            c.ticker = ticker;
+            c.name = entry.title;
+            break;
+          }
+        }
+        // Enrichir avec submissions pour secteur/ville
+        await enrichWithSubmissions(c);
+      }
+    }).catch(() => { /* best-effort */ });
+
+    return companies;
+  } catch (e) {
+    console.warn('[sec-edgar] search failed:', e);
+    return [];
+  }
+}
+
+/** Recherche par ticker (ex: AAPL, MSFT). */
 export async function searchEDGARByTicker(ticker: string): Promise<EDGARCompany | null> {
   try {
-    const map = await fetchTickerMapping();
+    const map = await loadTickerMap();
     const entry = map[ticker.toUpperCase().trim()];
     if (!entry) return null;
 
-    const cik = String(entry.cik_str).padStart(10, '0');
-    const submissions = await fetch(
-      `https://data.sec.gov/submissions/CIK${cik}.json`,
-      { headers: { 'User-Agent': USER_AGENT } },
-    );
-    if (!submissions.ok) {
-      // Fallback: info de base depuis le mapping ticker
-      return {
-        cik,
-        name: entry.title,
-        ticker: entry.ticker,
-        exchange: null,
-        sector: null,
-        city: null,
-        state: null,
-        country: 'US',
-        website: null,
-        email: null,
-        source: 'sec-edgar',
-        confidence: 0.7,
-      };
-    }
-
-    const sub: EDGARSubmissions = await submissions.json();
-    return {
-      cik,
-      name: sub.name ?? entry.title,
-      ticker: sub.tickers?.[0] ?? entry.ticker,
-      exchange: sub.exchanges?.[0] ?? null,
-      sector: sicToSector(sub.sic) ?? sub.sicDescription ?? null,
-      city: sub.addresses?.business?.city ?? sub.addresses?.mailing?.city ?? null,
-      state: sub.addresses?.business?.stateOrCountry ?? sub.addresses?.mailing?.stateOrCountry ?? null,
-      country: 'US',
-      website: null,
-      email: null,
-      source: 'sec-edgar',
-      confidence: 0.85,
+    const cik = cikToPadded(entry.cik_str);
+    const company: EDGARCompany = {
+      cik, name: entry.title, ticker: entry.ticker, exchange: null,
+      sector: null, city: null, state: null, country: 'US',
+      website: null, email: null, source: 'sec-edgar', confidence: 0.7,
     };
+    return await enrichWithSubmissions(company);
   } catch (e) {
     console.warn('[sec-edgar] ticker search failed:', e);
     return null;
   }
 }
 
-/**
- * Recherche d'entreprises par nom dans SEC EDGAR.
- * Utilise l'endpoint /cgi-bin/browse-edgar pour chercher par nom de société.
- */
-export async function searchEDGARByName(
-  companyName: string,
-  limit = 10,
-): Promise<EDGARCompany[]> {
+/** Recherche par nom (fallback lent, parcourt le mapping ticker). */
+export async function searchEDGARByName(name: string, limit = 10): Promise<EDGARCompany[]> {
   try {
-    const map = await fetchTickerMapping();
-    const nameLower = companyName.toLowerCase().trim();
+    const map = await loadTickerMap();
+    const nl = name.toLowerCase().trim();
     const results: EDGARCompany[] = [];
 
-    // Cherche dans le mapping local (toutes les entreprises enregistrées SEC)
     for (const [ticker, entry] of Object.entries(map)) {
-      if (entry.title.toLowerCase().includes(nameLower)) {
+      if (entry.title.toLowerCase().includes(nl)) {
         results.push({
-          cik: String(entry.cik_str).padStart(10, '0'),
-          name: entry.title,
-          ticker: entry.ticker,
-          exchange: null,
-          sector: null,
-          city: null,
-          state: null,
-          country: 'US',
-          website: null,
-          email: null,
-          source: 'sec-edgar',
-          confidence: 0.6,
+          cik: cikToPadded(entry.cik_str), name: entry.title, ticker: entry.ticker,
+          exchange: null, sector: null, city: null, state: null, country: 'US',
+          website: null, email: null, source: 'sec-edgar', confidence: 0.6,
         });
       }
-      if (results.length >= limit + 5) break;
+      if (results.length >= limit + 10) break;
     }
 
-    // Enrichir les premiers résultats avec les détails submissions
-    for (let i = 0; i < Math.min(results.length, limit); i++) {
-      const r = results[i];
-      try {
-        const subRes = await fetch(
-          `https://data.sec.gov/submissions/CIK${r.cik}.json`,
-          { headers: { 'User-Agent': USER_AGENT } },
-        );
-        if (subRes.ok) {
-          const sub: EDGARSubmissions = await subRes.json();
-          r.sector = sicToSector(sub.sic) ?? sub.sicDescription ?? null;
-          r.city = sub.addresses?.business?.city ?? sub.addresses?.mailing?.city ?? null;
-          r.state = sub.addresses?.business?.stateOrCountry ?? sub.addresses?.mailing?.stateOrCountry ?? null;
-          r.exchange = sub.exchanges?.[0] ?? null;
-          r.confidence = 0.85;
-        }
-      } catch {
-        // garde les infos de base
-      }
+    // Enrichir top 3
+    for (let i = 0; i < Math.min(results.length, 3); i++) {
+      results[i] = await enrichWithSubmissions(results[i]);
     }
-
     return results.slice(0, limit);
   } catch (e) {
     console.warn('[sec-edgar] name search failed:', e);
@@ -248,64 +256,31 @@ export async function searchEDGARByName(
   }
 }
 
-/** Recherche par mot-clé sectoriel (ex: "software", "bank", "pharma"). */
-export async function searchEDGARBySector(
-  sectorKeyword: string,
-  limit = 10,
-): Promise<EDGARCompany[]> {
+/** Recherche par secteur (parcourt le mapping ticker + submissions SIC). */
+export async function searchEDGARBySector(keyword: string, limit = 10): Promise<EDGARCompany[]> {
   try {
-    const map = await fetchTickerMapping();
-    const kw = sectorKeyword.toLowerCase().trim();
+    const map = await loadTickerMap();
+    const kw = keyword.toLowerCase();
     const seen = new Set<string>();
     const results: EDGARCompany[] = [];
 
-    // On doit d'abord obtenir les submissions pour chaque entreprise
-    // pour vérifier le SIC. Limitons à parcourir les tickers et chercher
-    // dans le titre d'abord (contient souvent le secteur).
     for (const [ticker, entry] of Object.entries(map)) {
-      const titleAndSic = entry.title.toLowerCase();
-      if (titleAndSic.includes(kw)) {
+      if (entry.title.toLowerCase().includes(kw)) {
         if (seen.has(ticker)) continue;
         seen.add(ticker);
         results.push({
-          cik: String(entry.cik_str).padStart(10, '0'),
-          name: entry.title,
-          ticker: entry.ticker,
-          exchange: null,
-          sector: null,
-          city: null,
-          state: null,
-          country: 'US',
-          website: null,
-          email: null,
-          source: 'sec-edgar',
-          confidence: 0.5,
+          cik: cikToPadded(entry.cik_str), name: entry.title, ticker: entry.ticker,
+          exchange: null, sector: null, city: null, state: null, country: 'US',
+          website: null, email: null, source: 'sec-edgar', confidence: 0.5,
         });
       }
       if (results.length >= limit * 3) break;
     }
 
-    // Enrichir les meilleurs résultats
-    const enriched: EDGARCompany[] = [];
-    for (let i = 0; i < Math.min(results.length, limit + 5); i++) {
-      const r = results[i];
-      try {
-        const subRes = await fetch(
-          `https://data.sec.gov/submissions/CIK${r.cik}.json`,
-          { headers: { 'User-Agent': USER_AGENT } },
-        );
-        if (subRes.ok) {
-          const sub: EDGARSubmissions = await subRes.json();
-          r.sector = sicToSector(sub.sic) ?? sub.sicDescription ?? null;
-          r.city = sub.addresses?.business?.city ?? sub.addresses?.mailing?.city ?? null;
-          r.confidence = 0.8;
-        }
-      } catch { /* noop */ }
-      enriched.push(r);
-      if (enriched.length >= limit) break;
+    for (let i = 0; i < Math.min(results.length, limit); i++) {
+      results[i] = await enrichWithSubmissions(results[i]);
     }
-
-    return enriched;
+    return results.slice(0, limit);
   } catch (e) {
     console.warn('[sec-edgar] sector search failed:', e);
     return [];

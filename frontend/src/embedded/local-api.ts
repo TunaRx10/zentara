@@ -20,7 +20,7 @@ import {
 } from './scoring';
 import { createLocalJob, getJob, listJobs, cancelLocalJob, retryLocalJob, type LocalJob } from './jobs';
 import { searchOverpass, searchOverpassByKeyword, geocodeNominatim, type OSMResult } from './overpass';
-import { searchEDGARByName, searchEDGARByTicker, searchEDGARBySector, type EDGARCompany } from './sec-edgar';
+import { searchEDGAR, searchEDGARByTicker, type EDGARCompany } from './sec-edgar';
 
 export interface LocalError {
   code: string;
@@ -859,61 +859,44 @@ export async function handleLocalRequest(method: string, path: string, body?: un
           }
         }
 
-        // --- SEC EDGAR (Companies) — toujours pour tout mode ---
+        // --- SEC EDGAR (Companies) — recherche rapide efts.sec.gov ---
         if (effectiveQuery) {
           try {
-            // Cherche par nom ou ticker
-            const edgarQuery = query || needs;
-            if (edgarQuery) {
-              // Détecte si c'est un ticker (1-5 lettres majuscules)
-              const tickerMatch = edgarQuery.match(/^[A-Z]{1,5}$/);
-              let edgarResults: EDGARCompany[];
-              if (tickerMatch) {
-                const r = await searchEDGARByTicker(tickerMatch[0]);
-                edgarResults = r ? [r] : await searchEDGARByName(edgarQuery, limit);
-              } else {
-                // Essayer de matcher par secteur si le mot-clé ressemble à un secteur
-                edgarResults = await searchEDGARByName(edgarQuery, limit);
-                // Si peu de résultats, chercher aussi par secteur
-                if (edgarResults.length < 3) {
-                  const sectorResults = await searchEDGARBySector(edgarQuery, limit - edgarResults.length);
-                  for (const sr of sectorResults) {
-                    if (!edgarResults.find((er) => er.cik === sr.cik)) {
-                      edgarResults.push(sr);
-                    }
-                  }
-                }
-              }
+            // Détecte si c'est un ticker (1-5 lettres majuscules)
+            const tickerMatch = effectiveQuery.match(/^[A-Z]{1,5}$/);
 
-              for (const r of edgarResults.slice(0, Math.ceil(limit / 2))) {
-                const dup = localResults.concat(webResults).find(
-                  (lr) => lr.name?.toLowerCase().includes(r.name.toLowerCase()) || r.name.toLowerCase().includes(lr.name?.toLowerCase()),
-                );
-                if (!dup) {
-                  webResults.push({
-                    id: `edgar-${r.cik}`,
-                    type: 'company',
-                    name: r.name,
-                    title: r.ticker,
-                    category: r.sector,
-                    city: r.city,
-                    country: r.country,
-                    website: r.website,
-                    email: r.email,
-                    phone: null,
-                    linkedin: null,
-                    source: r.source,
-                    sourceGroup: 'sec-edgar',
-                    confidence: r.confidence,
-                    score: r.ticker ? 60 : 45,
-                    tags: r.ticker ? [r.ticker] : [],
-                    company_id: null,
-                    company_created: false,
-                  });
-                }
+            const edgarResults: EDGARCompany[] = tickerMatch
+              ? (await searchEDGARByTicker(tickerMatch[0]).then((r) => (r ? [r] : []), () => []))
+              : await searchEDGAR(effectiveQuery, Math.ceil(limit / 2));
+
+            for (const r of edgarResults) {
+              const dup = localResults.concat(webResults).find(
+                (lr) => lr.name?.toLowerCase().includes(r.name.toLowerCase()) || r.name.toLowerCase().includes(lr.name?.toLowerCase()),
+              );
+              if (!dup) {
+                webResults.push({
+                  id: `edgar-${r.cik}`,
+                  type: 'company',
+                  name: r.name,
+                  title: r.ticker,
+                  category: r.sector,
+                  city: r.city,
+                  country: r.country,
+                  website: r.website,
+                  email: r.email,
+                  phone: null,
+                  linkedin: null,
+                  source: r.source,
+                  sourceGroup: 'sec-edgar',
+                  confidence: r.confidence,
+                  score: r.ticker ? 60 : 45,
+                  tags: r.ticker ? [r.ticker] : [],
+                  company_id: null,
+                  company_created: false,
+                });
               }
-              usedSources.push('sec-edgar');
             }
+            if (edgarResults.length > 0) usedSources.push('sec-edgar');
           } catch (e) {
             console.warn('[engine] SEC EDGAR search failed:', e);
             markWebSourceOffline('zentara-companies');
