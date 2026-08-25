@@ -44,7 +44,7 @@ const fail = (code: string, message: string, status = 400): LocalRouteResult => 
 // Si elles échouent, elles sont marquées comme « hors-ligne ».
 let _webSourcesCache: Array<{ source: string; message: string; available: boolean }> | null = null;
 
-const DEFAULT_BACKEND_URL: string = ''; // Configurable via Settings → Backend
+const DEFAULT_BACKEND_URL: string = 'https://melissa-regime-papua-armor.trycloudflare.com/api'; // Cloudflare tunnel H24
 
 function getBackendUrl(): string | null {
   try {
