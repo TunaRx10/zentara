@@ -791,199 +791,92 @@ export async function handleLocalRequest(method: string, path: string, body?: un
       const radiusKm = Number(data.radius) || 10;
 
       if (!query && !needs && !location) {
-        return ok({ engine: 'local', mode, results: [], total: 0, sources: ['local-db'], errors: getOfflineErrors(), companies_created: 0, prospects_created: 0, contacts_created: 0 });
+        return ok({ engine: 'local', mode, results: [], total: 0, sources: [], errors: getOfflineErrors(), companies_created: 0, prospects_created: 0, contacts_created: 0 });
       }
 
-      // Skip local-db TOUJOURS (seed est vide). Cherche live uniquement.
-      const localResults: any[] = [];
-      let webResults: any[] = [];
+      // 1. BACKEND PRIORITY (42 sources + LinkedIn via tunnel)
+      let results: any[] = [];
       let usedSources: string[] = [];
-      let companiesCreated = 0;
-      let prospectsCreated = 0;
-      let contactsCreated = 0;
+      const backendUrl = getBackendUrl();
 
-      // Toujours chercher en live (APIs directes navigateur)
-      const doWeb = true;
-      const effectiveQuery = query || needs;
+      if (backendUrl) {
+        try {
+          const bp: any = { mode, query: query || undefined, needs: needs || undefined, roles: needs || undefined, location: location || undefined, radius: radiusKm || undefined, limit, save: false };
+          const resp = await Promise.race([
+            fetchBackendSearch(bp),
+            new Promise<any>(r => setTimeout(() => r(null), 25_000)),
+          ]);
+          if (resp && Array.isArray(resp.results) && resp.results.length > 0) {
+            results = resp.results.map((bh: any) => ({
+              id: bh.id ?? 'be-' + Math.random().toString(36).slice(2, 10),
+              type: bh.type ?? 'company', name: bh.name, title: bh.title ?? null,
+              category: bh.category ?? null, city: bh.city ?? null, country: bh.country ?? null,
+              website: bh.website ?? null, email: bh.email ?? null, phone: bh.phone ?? null,
+              linkedin: bh.linkedin ?? null,
+              source: bh.source ?? 'backend', sourceGroup: bh.sourceGroup ?? bh.source ?? 'backend',
+              confidence: bh.confidence ?? 0.9, score: bh.score ?? 65,
+              tags: bh.tags ?? [], company_id: bh.company_id ?? null, company_created: false,
+            }));
+            usedSources = (resp.sources || []).slice();
+            // Mark LinkedIn available
+            const ps = getWebSourceStatus().find(s => s.source === 'zentara-people');
+            if (ps) ps.available = true;
+          }
+        } catch (e) { console.warn('[engine] backend:', e); }
+      }
 
-      if (doWeb && (effectiveQuery || location)) {
-        // --- OSM / Overpass (Local) — toujours pour tout mode ---
-        if (effectiveQuery || location) {
+      // 2. FALLBACK: SEC EDGAR + OSM direct (browser) if backend returned nothing
+      if (results.length === 0 && (query || needs)) {
+        usedSources = ['browser-direct'];
+        try {
+          const tickerMatch = (query || needs).match(/^[A-Z]{1,5}$/);
+          const edgarResults = tickerMatch
+            ? (await searchEDGARByTicker(tickerMatch[0]).then(r => r ? [r] : [], () => []))
+            : await searchEDGAR(query || needs, Math.ceil(limit));
+          for (const r of edgarResults) {
+            results.push({
+              id: 'edgar-' + r.cik, type: 'company', name: r.name, title: r.ticker,
+              category: r.sector, city: r.city, country: r.country,
+              website: r.website, email: r.email, phone: null, linkedin: null,
+              source: r.source, sourceGroup: 'sec-edgar', confidence: r.confidence,
+              score: r.ticker ? 60 : 40, tags: r.ticker ? [r.ticker] : [],
+              company_id: null, company_created: false,
+            });
+          }
+          if (edgarResults.length > 0) usedSources.push('sec-edgar');
+        } catch {}
+
+        if (results.length < limit) {
           try {
-            let lat: number | undefined;
-            let lon: number | undefined;
-
-            // Géocode si un lieu est donné
+            let lat = 48.8566, lon = 2.3522;
             if (location) {
               const geo = await geocodeNominatim(location);
               if (geo) { lat = geo.lat; lon = geo.lon; }
-            } else {
-              // Fallback : coordonnées par défaut (Paris)
-              lat = 48.8566;
-              lon = 2.3522;
             }
-
-            if (lat != null && lon != null) {
-              const osmResults = await searchOverpass(effectiveQuery || 'office', lat, lon, radiusKm * 1000, Math.ceil(limit / 2));
-              for (const r of osmResults) {
-                // Éviter les doublons avec les résultats locaux
-                const dup = localResults.find((lr) => lr.name?.toLowerCase() === r.name.toLowerCase());
-                if (!dup) {
-                  webResults.push({
-                    id: r.id,
-                    type: 'company',
-                    name: r.name,
-                    title: null,
-                    category: r.category,
-                    city: r.city,
-                    country: r.country,
-                    website: r.website,
-                    email: r.email,
-                    phone: r.phone,
-                    linkedin: null,
-                    source: r.source,
-                    sourceGroup: 'openstreetmap',
-                    confidence: r.confidence,
-                    score: 50, // score neutre faute d'analyse
-                    tags: [],
-                    company_id: null,
-                    company_created: false,
-                  });
-                }
-              }
-              usedSources.push('openstreetmap');
-            }
-          } catch (e) {
-            console.warn('[engine] OSM search failed:', e);
-            markWebSourceOffline('zentara-local');
-          }
-        }
-
-        // --- SEC EDGAR (Companies) — recherche rapide efts.sec.gov ---
-        if (effectiveQuery) {
-          try {
-            // Détecte si c'est un ticker (1-5 lettres majuscules)
-            const tickerMatch = effectiveQuery.match(/^[A-Z]{1,5}$/);
-
-            const edgarResults: EDGARCompany[] = tickerMatch
-              ? (await searchEDGARByTicker(tickerMatch[0]).then((r) => (r ? [r] : []), () => []))
-              : await searchEDGAR(effectiveQuery, Math.ceil(limit / 2));
-
-            for (const r of edgarResults) {
-              const dup = localResults.concat(webResults).find(
-                (lr) => lr.name?.toLowerCase().includes(r.name.toLowerCase()) || r.name.toLowerCase().includes(lr.name?.toLowerCase()),
-              );
-              if (!dup) {
-                webResults.push({
-                  id: `edgar-${r.cik}`,
-                  type: 'company',
-                  name: r.name,
-                  title: r.ticker,
-                  category: r.sector,
-                  city: r.city,
-                  country: r.country,
-                  website: r.website,
-                  email: r.email,
-                  phone: null,
-                  linkedin: null,
-                  source: r.source,
-                  sourceGroup: 'sec-edgar',
-                  confidence: r.confidence,
-                  score: r.ticker ? 60 : 45,
-                  tags: r.ticker ? [r.ticker] : [],
-                  company_id: null,
-                  company_created: false,
+            const osm = await searchOverpass(query || needs || 'office', lat, lon, radiusKm * 1000, Math.ceil((limit - results.length) / 2));
+            for (const r of osm) {
+              if (!results.find(x => x.name?.toLowerCase() === r.name.toLowerCase())) {
+                results.push({
+                  id: r.id, type: 'company', name: r.name, title: null,
+                  category: r.category, city: r.city, country: r.country,
+                  website: r.website, email: r.email, phone: r.phone, linkedin: null,
+                  source: r.source, sourceGroup: 'openstreetmap', confidence: r.confidence,
+                  score: 50, tags: [], company_id: null, company_created: false,
                 });
               }
             }
-            if (edgarResults.length > 0) usedSources.push('sec-edgar');
-          } catch (e) {
-            console.warn('[engine] SEC EDGAR search failed:', e);
-            markWebSourceOffline('zentara-companies');
-          }
+            if (osm.length > 0) usedSources.push('openstreetmap');
+          } catch {}
         }
       }
 
-      // --- Backend proxy (LinkedIn People) — NON BLOQUANT (timeout 8s) ---
-      let backendResults: any[] = [];
-      if (getBackendUrl()) {
-        try {
-          const backendPayload: any = { mode, query: query || undefined, needs: needs || undefined, roles: needs || undefined, location: location || undefined, radius: radiusKm || undefined, limit: Math.ceil(limit * 1.5), save: false };
-          const backendData = await Promise.race([
-            fetchBackendSearch(backendPayload),
-            new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
-          ]);
-          if (backendData && Array.isArray(backendData.results)) {
-            for (const bh of backendData.results) {
-              const dup = webResults.concat(localResults).find((lr) => {
-                const bn = (bh.name ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                const ln = (lr.name ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                return bn && ln && (bn === ln || bn.includes(ln) || ln.includes(bn));
-              });
-              if (!dup) {
-                backendResults.push({
-                  id: bh.id ?? `be-${Math.random().toString(36).slice(2, 10)}`,
-                  type: bh.type ?? 'company',
-                  name: bh.name,
-                  title: bh.title ?? null,
-                  category: bh.category ?? null,
-                  city: bh.city ?? null,
-                  country: bh.country ?? null,
-                  website: bh.website ?? null,
-                  email: bh.email ?? null,
-                  phone: bh.phone ?? null,
-                  linkedin: bh.linkedin ?? null,
-                  source: bh.source ?? 'zentara-people',
-                  sourceGroup: bh.sourceGroup ?? bh.source ?? 'backend',
-                  confidence: bh.confidence ?? 0.9,
-                  score: bh.score ?? 55,
-                  tags: bh.tags ?? [],
-                  company_id: bh.company_id ?? null,
-                  company_created: false,
-                });
-              }
-            }
-            if (backendData.sources) {
-              for (const s of backendData.sources) {
-                if (!usedSources.includes(s)) usedSources.push(s);
-              }
-            }
-          }
-          // Marquer LinkedIn comme available si on a eu des résultats
-          if (backendResults.length > 0) {
-            const peopleSrc = getWebSourceStatus().find((s) => s.source === 'zentara-people');
-            if (peopleSrc) peopleSrc.available = true;
-          }
-        } catch (e) {
-          console.warn('[engine] Backend proxy failed:', e);
-        }
-      }
-
-      // Fusionner les résultats : backend d'abord (LinkedIn > SEC > OSM), puis web, puis local
-      const allResults = [...backendResults, ...webResults, ...localResults];
-      // Supprimer les doublons approximatifs
-      const deduped: typeof allResults = [];
-      const seen = new Set<string>();
-      for (const r of allResults) {
-        const key = (r.name ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 30);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        deduped.push(r);
-      }
-      // Trier par score décroissant
-      deduped.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-      const final = deduped.slice(0, limit);
+      results.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      const final = results.slice(0, limit);
 
       return ok({
-        engine: 'zentara-one',
-        mode,
-        results: final,
-        total: final.length,
-        sources: [...new Set(usedSources)],
-        errors: getOfflineErrors(),
-        companies_created: companiesCreated,
-        prospects_created: prospectsCreated,
-        contacts_created: contactsCreated,
+        engine: 'zentara-one', mode, results: final, total: final.length,
+        sources: [...new Set(usedSources)], errors: getOfflineErrors(),
+        companies_created: 0, prospects_created: 0, contacts_created: 0,
       });
     }
     if (b === 'job-email' && m === 'POST') {
