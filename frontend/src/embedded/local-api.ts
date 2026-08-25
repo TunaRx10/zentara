@@ -44,7 +44,7 @@ const fail = (code: string, message: string, status = 400): LocalRouteResult => 
 // Si elles échouent, elles sont marquées comme « hors-ligne ».
 let _webSourcesCache: Array<{ source: string; message: string; available: boolean }> | null = null;
 
-const DEFAULT_BACKEND_URL = 'https://showcase-highlights-non-newsletter.trycloudflare.com/api'; // Backend 42 sources + LinkedIn (10s)
+const DEFAULT_BACKEND_URL = 'https://murphy-players-beings-learned.trycloudflare.com/api'; // Backend 39 sources (companies <5s)
 
 function getBackendUrl(): string | null {
   try {
