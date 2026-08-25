@@ -2203,7 +2203,7 @@ api.post('/engine/search', async (req, res) => {
     try {
       ok(res, { engine: 'Zentara One', mode, results: [], total: 0, sources: [], errors: [{ group: 'timeout', message: 'Recherche trop longue — réessayez ou réduisez le périmètre' }], companies_created: 0, prospects_created: 0, contacts_created: 0 });
     } catch (_e) { /* déjà répondu */ }
-  }, 22_000);
+  }, 8_000);
 
   const r = await ENGINE.search({
     mode,

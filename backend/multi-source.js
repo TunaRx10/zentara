@@ -184,7 +184,7 @@ async function rankByNiche(q, hits) {
     try {
       const res = await Promise.race([
         AI.chatCompletion(messages, opts),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('AI rank timeout')), 15000)),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('AI rank timeout')), 4000)),
       ]);
       parsed = AI.extractJson(res && res.content);
     } catch {
@@ -246,7 +246,7 @@ async function runSearch(q, opts = {}) {
               // Clés optionnelles injectées aux sources qui les supportent (ex: OpenCorporates)
               apiToken: apiKeys.opencorporates || undefined,
             })).catch(() => []),
-            new Promise((res) => setTimeout(() => res([]), 9000)),
+            new Promise((res) => setTimeout(() => res([]), 4000)),
           ]);
           return (items || []).map((l) => toHit(s.id, l));
         },
@@ -261,7 +261,7 @@ async function runSearch(q, opts = {}) {
       run: async () => {
         const items = await Promise.race([
           SCRAPE.searchEdgar(q, Math.min(limit, 15)).catch(() => []),
-          new Promise((res) => setTimeout(() => res([]), 10000)),
+          new Promise((res) => setTimeout(() => res([]), 5000)),
         ]);
         return (items || []).map((r) => ({
           id: `sec_${(r.name || '').replace(/\W+/g, '')}`,
@@ -281,13 +281,10 @@ async function runSearch(q, opts = {}) {
     });
   }
 
-  // 3) Exécution par lots de 5 avec deadline globale
-  let slot = 0;
-  while (slot < jobs.length) {
-    if (Date.now() - started > maxMs) break;
-    const batch = jobs.slice(slot, slot + 5);
-    slot += 5;
-    const settled = await Promise.allSettled(batch.map((j) => j.run().then((hits) => ({ tag: j.tag, hits }))));
+  // 3) Exécution parallèle complète — toutes les sources en même temps.
+  //    Un seul round de 39 jobs → réponse en 4s max (per-source timeout).
+  if (Date.now() - started < maxMs) {
+    const settled = await Promise.allSettled(jobs.map((j) => j.run().then((hits) => ({ tag: j.tag, hits }))));
     for (const r of settled) {
       if (r.status === 'rejected') {
         errors.push({ source: r.reason?.tag || 'unknown', message: String(r.reason?.message || r.reason) });

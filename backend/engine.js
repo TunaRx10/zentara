@@ -204,7 +204,7 @@ async function search(params = {}) {
     if (mode === 'people' || mode === 'local') return [];
     if (!q && !company) return [];
     try {
-      const r = await MULTI.runSearch(q || company, { sources: params.sources, limit, maxMs: 10000, apiKeys });
+      const r = await MULTI.runSearch(q || company, { sources: params.sources, limit, maxMs: 5000, apiKeys });
       sources.push(...(r.sources || []));
       errors.push(...(r.errors || []).map((e) => ({ group: GROUPS.companies.id, ...e })));
       return (r.results || []).map(fromDirectory).filter(Boolean);
@@ -297,7 +297,7 @@ async function search(params = {}) {
   // Chaque branche est plafonnée à BRANCH_MS : une source lente (LinkedIn,
   // MCP…) ne retarde jamais la réponse. Les résultats rapides (SEC, OSM,
   // 39 annuaires) partent immédiatement.
-  const BRANCH_MS = 10000;
+  const BRANCH_MS = 7500;
   const raced = (p) => Promise.race([
     p,
     new Promise((resolve) => setTimeout(() => resolve([]), BRANCH_MS)),
