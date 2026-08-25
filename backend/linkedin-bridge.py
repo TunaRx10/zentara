@@ -169,6 +169,30 @@ def _person(rec):
     }
 
 
+def _patch_proxy():
+    """Monkey-patch StaffSpy : route la session via un proxy résidentiel
+    (LINKEDIN_PROXY) si défini. Requis depuis une IP datacenter."""
+    try:
+        from staffspy.utils.utils import Login
+    except Exception:
+        return
+    proxy = env("LINKEDIN_PROXY")
+    if not proxy:
+        return
+    try:
+        _orig = Login.load_session
+        def _patched(self):
+            session = _orig(self)
+            try:
+                session.proxies = {"http": proxy, "https": proxy}
+            except Exception:
+                pass
+            return session
+        Login.load_session = _patched
+    except Exception:
+        pass
+
+
 def _run_staff(params):
     ss_ok, ss_msg = check_staffspy()
     if not ss_ok:
@@ -181,6 +205,7 @@ def _run_staff(params):
             "records": [],
         }
     try:
+        _patch_proxy()
         from staffspy import LinkedInAccount
 
         company_name = (params.get("company") or "").strip() or None
