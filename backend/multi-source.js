@@ -32,11 +32,12 @@ function freeSources() {
  *   - géo Overpass (openstreetmap — géré séparément par le mode local)
  * pour ne remonter QUE des sociétés/entités prospectables.
  */
-const BUSINESS_SOURCE_CATEGORIES = new Set(['company', 'local', 'government', 'startup']);
-const NON_BUSINESS_SOURCE_IDS = new Set(['openstreetmap']);
+const BUSINESS_SOURCE_CATEGORIES = new Set(['company', 'local', 'government', 'startup', 'professional']);
+const BUSINESS_EXTRA_IDS = new Set(['github-orgs']); // orgs GitHub = vraies sociétés (souvent SaaS)
+const NON_BUSINESS_SOURCE_IDS = new Set(['openstreetmap', 'linkedin', 'linkedin-live', 'xing']);
 function businessSourceIds() {
   const ids = freeSources()
-    .filter((s) => BUSINESS_SOURCE_CATEGORIES.has(s.category) && !NON_BUSINESS_SOURCE_IDS.has(s.id))
+    .filter((s) => (BUSINESS_SOURCE_CATEGORIES.has(s.category) || BUSINESS_EXTRA_IDS.has(s.id)) && !NON_BUSINESS_SOURCE_IDS.has(s.id))
     .map((s) => s.id);
   return [...new Set(ids.concat(['sec-edgar']))];
 }
@@ -215,7 +216,10 @@ async function runSearch(q, opts = {}) {
   const asked = String(opts.sources || '').split(',').map((s) => s.trim()).filter(Boolean);
   // Par défaut : TOUTES les sources gratuites (plus de sous-ensemble DEFAULTS).
   const defaultIds = freeSources().map((s) => s.id);
-  const wanted = new Set(asked.length ? asked : defaultIds);
+  // Par défaut : UNIQUEMENT les sources d'entreprises réelles (annuaires,
+  // registres, startups). Pas de social, developer, education, search brut.
+  // L'utilisateur peut override avec ?sources=npm,devto si besoin.
+  const wanted = new Set(asked.length ? asked : businessSourceIds());
 
   let results = [];
   const errors = [];

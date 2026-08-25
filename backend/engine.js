@@ -149,6 +149,126 @@ function toArr(x) {
   return (x && Array.isArray(x.leads)) ? x.leads : [];
 }
 
+// ---------------------------------------------------------------------
+// Filtre de qualité — ne garder que de VRAIES entreprises.
+// ---------------------------------------------------------------------
+
+// Sources qui renvoient surtout des individus/développeurs (pas des sociétés).
+const PERSONAL_SOURCES = new Set([
+  'npm', 'devto', 'pypi', 'dockerhub', 'orcid', 'academia', 'researchgate',
+  'google-scholar', 'conference-speakers', 'stackoverflow',
+]);
+
+// Plateformes d'hébergement perso — un site dessus = pas une entreprise.
+const PERSONAL_DOMAINS = [
+  'wordpress.com', 'blogspot.com', 'github.io', 'upwork.com', 'medium.com',
+  'wixsite.com', 'weebly.com', 'behance.net', 'dribbble.com', 'notion.site',
+  'wix.com', 'squarespace.com', 'linkedin.com', 'facebook.com', 'twitter.com',
+  'x.com', 'instagram.com', 'google.com', 'youtube.com', 'reddit.com',
+];
+
+/** Le site est une plateforme perso (blog/portfolio) → pas une entreprise. */
+function isPersonalSite(website) {
+  if (!website) return false;
+  try {
+    const u = /^https?:\/\//.test(website) ? website : 'https://' + website;
+    const h = new URL(u).hostname.replace(/^www\./, '');
+    return PERSONAL_DOMAINS.some((d) => h === d || h.endsWith('.' + d));
+  } catch { return false; }
+}
+
+/** Nom type « Prénom Nom » (2 mots alphabétiques capitalisés, pas de suffixe société). */
+function isPersonalName(name) {
+  const parts = String(name || '').trim().split(/\s+/);
+  if (parts.length !== 2) return false;
+  return parts.every((p) => /^[A-Z][A-Za-zà-ÿ'’-]+$/.test(p));
+}
+
+// Sources = registres/annuaires d'entreprises réelles → bonus de score.
+const HIGH_QUALITY_SOURCES = new Set([
+  'sec-edgar', 'opencorporates', 'companies-house', 'openstreetmap', 'yelp',
+  'yellowpages', 'bbb', 'chamberofcommerce', 'builtin', 'builtwith',
+  'eu-register', 'samgov', 'usaspending', 'census', 'wikidata', 'trademarks',
+  'patents', 'indiehackers', 'betalist', 'google-places', 'google-places-new',
+  'serpapi', 'outscraper',
+]);
+
+/** Nom qui ressemble à un username / package (pas une entreprise). */
+function looksLikeUsername(name) {
+  const n = String(name || '').trim();
+  if (!n) return true;
+  if (/\s/.test(n)) return false; // avec espaces → nom réel ou multi-mots
+  // handle avec chiffres : arjunpatel3681, MidnightEcho794261
+  if (/\d/.test(n) && /^[A-Za-z0-9_.-]{2,}$/.test(n)) return true;
+  // token minuscule unique (package npm) : saas-js, rameshlohala
+  if (/^[a-z0-9][a-z0-9-]{3,}$/.test(n)) return true;
+  return false;
+}
+
+/** L'entreprise a au moins un signal de vraie société. */
+function hasCompanySignals(r) {
+  return !!(r.website || r.email || r.phone || r.address || r.city || r.country);
+}
+
+/**
+ * Nettoie les résultats : supprime le bruit (usernames, packages, profils
+ * perso), booste les registres officiels, dédoublonne par domaine, trie.
+ */
+function cleanResults(results) {
+  const out = [];
+  const seen = new Map();
+  for (const r of results) {
+    const src = String(r.source || '');
+    const name = String(r.name || '').trim();
+    if (!name) continue;
+    // Les résultats people/jobs (LinkedIn) ne passent pas par ce filtre société.
+    if (r.type && r.type !== 'company') continue;
+
+    // 1) Sources perso (npm/devto/stackoverflow/…) → jamais des entreprises.
+    if (PERSONAL_SOURCES.has(src)) continue;
+    // 1bis) GitHub : on garde les orgs, on vire les profils perso (site perso,
+    //   nom Prénom Nom, ou handle sans signal entreprise).
+    if (src === 'github') {
+      if (isPersonalSite(r.website)) continue;
+      if (isPersonalName(name)) continue;
+    }
+    // 2) Nom type username/package sans signal entreprise → bruit.
+    if (looksLikeUsername(name) && !hasCompanySignals(r)) continue;
+
+    // 3) Score : bonus registres officiels, malus sources perso, bonus données.
+    let s = Number(r.score) || 0;
+    if (HIGH_QUALITY_SOURCES.has(src)) s += 15;
+    else if (PERSONAL_SOURCES.has(src)) s -= 15;
+    if (r.website) s += 10;
+    if (r.email || r.phone) s += 6;
+    if (r.city || r.country) s += 4;
+    r.score = Math.max(0, Math.min(100, Math.round(s)));
+
+    // 4) Dédoublonnage par domaine (puis par source+nom). En cas d'égalité,
+    //    on préfère le registre officiel / github-orgs au profil github.
+    let domain = null;
+    if (r.website) {
+      try {
+        const u = /^https?:\/\//.test(r.website) ? r.website : 'https://' + r.website;
+        domain = new URL(u).hostname.replace(/^www\./, '');
+      } catch { domain = null; }
+    }
+    const key = domain || `${src}:${name.toLowerCase()}`;
+    const prev = seen.get(key);
+    if (prev) {
+      const prio = (s) => (HIGH_QUALITY_SOURCES.has(s) || s === 'github-orgs' ? 2 : s === 'github' ? 0 : 1);
+      if ((r.score || 0) > (prev.score || 0) || ((r.score || 0) === (prev.score || 0) && prio(r.source) > prio(prev.source))) {
+        seen.set(key, r);
+      }
+      continue;
+    }
+    seen.set(key, r);
+    out.push(r);
+  }
+  out.sort((a, b) => (b.score || 0) - (a.score || 0));
+  return out;
+}
+
 /** Statut du moteur + sous-moteurs. */
 async function status(apiKeys = {}) {
   const li = await LINKEDIN.status();
@@ -316,7 +436,7 @@ async function search(params = {}) {
     buckets.push(...(await raced(runLocal())));
   }
 
-  const results = merge(...[buckets]);
+  const results = cleanResults(merge(...[buckets]));
   return {
     engine: ENGINE_NAME,
     mode,
