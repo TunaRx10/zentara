@@ -204,7 +204,7 @@ async function search(params = {}) {
     if (mode === 'people' || mode === 'local') return [];
     if (!q && !company) return [];
     try {
-      const r = await MULTI.runSearch(q || company, { sources: params.sources, limit, apiKeys });
+      const r = await MULTI.runSearch(q || company, { sources: params.sources, limit, maxMs: 10000, apiKeys });
       sources.push(...(r.sources || []));
       errors.push(...(r.errors || []).map((e) => ({ group: GROUPS.companies.id, ...e })));
       return (r.results || []).map(fromDirectory).filter(Boolean);
@@ -294,17 +294,26 @@ async function search(params = {}) {
     return out;
   };
 
+  // Chaque branche est plafonnée à BRANCH_MS : une source lente (LinkedIn,
+  // MCP…) ne retarde jamais la réponse. Les résultats rapides (SEC, OSM,
+  // 39 annuaires) partent immédiatement.
+  const BRANCH_MS = 10000;
+  const raced = (p) => Promise.race([
+    p,
+    new Promise((resolve) => setTimeout(() => resolve([]), BRANCH_MS)),
+  ]);
+
   if (mode === 'all') {
-    const [c, p, l, j] = await Promise.all([runCompanies(), runPeople(), runLocal(), runJobs()]);
+    const [c, p, l, j] = await Promise.all([raced(runCompanies()), raced(runPeople()), raced(runLocal()), raced(runJobs())]);
     buckets.push(...c, ...p, ...l, ...j);
   } else if (mode === 'companies') {
-    buckets.push(...(await runCompanies()));
+    buckets.push(...(await raced(runCompanies())));
   } else if (mode === 'people') {
-    buckets.push(...(await runPeople()));
+    buckets.push(...(await raced(runPeople())));
   } else if (mode === 'jobs') {
-    buckets.push(...(await runJobs()));
+    buckets.push(...(await raced(runJobs())));
   } else if (mode === 'local') {
-    buckets.push(...(await runLocal()));
+    buckets.push(...(await raced(runLocal())));
   }
 
   const results = merge(...[buckets]);

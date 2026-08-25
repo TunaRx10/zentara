@@ -44,7 +44,7 @@ const fail = (code: string, message: string, status = 400): LocalRouteResult => 
 // Si elles échouent, elles sont marquées comme « hors-ligne ».
 let _webSourcesCache: Array<{ source: string; message: string; available: boolean }> | null = null;
 
-const DEFAULT_BACKEND_URL = ''; // pas de backend par défaut — la recherche est 100% autonome (SEC EDGAR + OSM directs)
+const DEFAULT_BACKEND_URL = 'https://showcase-highlights-non-newsletter.trycloudflare.com/api'; // Backend 42 sources + LinkedIn (10s)
 
 function getBackendUrl(): string | null {
   try {
@@ -80,7 +80,7 @@ async function fetchBackendSearch(payload: any): Promise<any | null> {
   if (!base) return null;
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8_000);
+    const timer = setTimeout(() => ctrl.abort(), 16_000);
     const res = await fetch(`${base}/engine/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

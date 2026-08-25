@@ -157,7 +157,7 @@ async function searchStaff(company, opts = {}) {
     roles: opts.roles || opts.needs || '',
     location: opts.location || '',
     limit: opts.limit || 25,
-  }, opts.timeoutMs || 180000);
+  }, opts.timeoutMs || 15000);
   const leads = (r.records || []).map(toLead).filter(Boolean);
   return { ...r, leads };
 }
@@ -170,7 +170,7 @@ async function searchPeople(niche, opts = {}) {
     keywords,
     location: opts.location || '',
     limit: opts.limit || 25,
-  }, opts.timeoutMs || 180000);
+  }, opts.timeoutMs || 15000);
   const leads = (r.records || []).map(toLead).filter(Boolean);
   return { ...r, leads, keywords };
 }
@@ -190,7 +190,7 @@ async function withMcpSession(cb, opts = {}) {
     await client.start(40000);
     const tools = await client.listTools(30000);
     const toolNames = tools.map((t) => t.name);
-    const call = async (toolName, args, timeoutMs = 120000) => {
+    const call = async (toolName, args, timeoutMs = 12000) => {
       const result = await client.callTool(toolName, args, timeoutMs);
       let rawText = '';
       const content = result && result.content;

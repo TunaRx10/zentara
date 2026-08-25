@@ -2194,6 +2194,17 @@ api.post('/engine/search', async (req, res) => {
     return ok(res, { engine: 'Zentara One', mode, results: [], total: 0, sources: [], errors: [], companies_created: 0, prospects_created: 0, contacts_created: 0 });
   }
 
+  // Timeout global : on répond au plus tard en 18s avec ce qu'on a.
+  // La recherche ne doit JAMAIS bloquer l'utilisateur.
+  let finished = false;
+  const t = setTimeout(() => {
+    if (finished) return;
+    finished = true;
+    try {
+      ok(res, { engine: 'Zentara One', mode, results: [], total: 0, sources: [], errors: [{ group: 'timeout', message: 'Recherche trop longue — réessayez ou réduisez le périmètre' }], companies_created: 0, prospects_created: 0, contacts_created: 0 });
+    } catch (_e) { /* déjà répondu */ }
+  }, 22_000);
+
   const r = await ENGINE.search({
     mode,
     query: body.query || body.niche,
@@ -2278,6 +2289,9 @@ api.post('/engine/search', async (req, res) => {
     }
   }
 
+  if (finished) return; // le timeout a déjà répondu
+  finished = true;
+  clearTimeout(t);
   ok(res, {
     ...r,
     companies_created,
