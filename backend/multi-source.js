@@ -173,24 +173,16 @@ async function rankByNiche(q, hits) {
   ];
 
   let parsed = null;
-  // 1er essai : gemini flash-lite (non-« thinking », ~3s).
-  // 2e essai : chaîne par défaut (fallback providers) — couvre le cas d'un
-  //   rate-limit qui renvoie une réponse VIDE (HTTP 200) sans lever d'exception.
-  const attempts = [
-    { json: true, maxTokens: 1500, provider: 'gemini', model: 'gemini-3.1-flash-lite' },
-    { json: true, maxTokens: 1500 },
-  ];
-  for (const opts of attempts) {
-    try {
-      const res = await Promise.race([
-        AI.chatCompletion(messages, opts),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('AI rank timeout')), 4000)),
-      ]);
-      parsed = AI.extractJson(res && res.content);
-    } catch {
-      parsed = null;
-    }
-    if (parsed && Array.isArray(parsed.ranked) && parsed.ranked.length > 0) break;
+  // UN SEUL essai rapide (gemini flash-lite, ~1s). Le ranking IA est un
+  // bonus : s'il timeout ou échoue, on garde les résultats non classés.
+  try {
+    const res = await Promise.race([
+      AI.chatCompletion(messages, { json: true, maxTokens: 1500, provider: 'gemini', model: 'gemini-3.1-flash-lite' }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('AI rank timeout')), 1000)),
+    ]);
+    parsed = AI.extractJson(res && res.content);
+  } catch {
+    parsed = null;
   }
 
   const ranked = parsed && Array.isArray(parsed.ranked) ? parsed.ranked : null;
@@ -246,7 +238,7 @@ async function runSearch(q, opts = {}) {
               // Clés optionnelles injectées aux sources qui les supportent (ex: OpenCorporates)
               apiToken: apiKeys.opencorporates || undefined,
             })).catch(() => []),
-            new Promise((res) => setTimeout(() => res([]), 4000)),
+            new Promise((res) => setTimeout(() => res([]), 3000)),
           ]);
           return (items || []).map((l) => toHit(s.id, l));
         },
@@ -261,7 +253,7 @@ async function runSearch(q, opts = {}) {
       run: async () => {
         const items = await Promise.race([
           SCRAPE.searchEdgar(q, Math.min(limit, 15)).catch(() => []),
-          new Promise((res) => setTimeout(() => res([]), 5000)),
+          new Promise((res) => setTimeout(() => res([]), 3000)),
         ]);
         return (items || []).map((r) => ({
           id: `sec_${(r.name || '').replace(/\W+/g, '')}`,
