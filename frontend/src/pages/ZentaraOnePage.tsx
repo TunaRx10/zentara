@@ -37,7 +37,6 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmailComposerModal } from '@/components/EmailComposerModal';
-import { EngineLauncher } from '@/components/EngineLauncher';
 import { getApiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 import { useToast } from '@/contexts/ToastProvider';
@@ -118,6 +117,7 @@ export function ZentaraOnePage(): React.ReactElement {
   const [mode, setMode] = React.useState<Mode>('all');
   const [query, setQuery] = React.useState('');
   const [needs, setNeeds] = React.useState('');
+  const [context, setContext] = React.useState('');
   const [location, setLocation] = React.useState('');
   const [limit, setLimit] = React.useState(20);
   const [radius, setRadius] = React.useState('');
@@ -166,6 +166,7 @@ export function ZentaraOnePage(): React.ReactElement {
         query: query.trim(),
         needs: needs.trim() || undefined,
         roles: needs.trim() || undefined,
+        context: context.trim() || undefined,
         location: location.trim() || undefined,
         radius: radius ? Number(radius) : undefined,
         limit,
@@ -244,10 +245,7 @@ export function ZentaraOnePage(): React.ReactElement {
         </div>
       </div>
 
-      {/* Moteur — section de lancement (toutes sources, session persistée) */}
-      <EngineLauncher />
-
-      {/* Form */}
+      {/* Form — moteur UNIQUE Zentara One (toutes sources, critères détaillés) */}
       <Card className="border-border/60 bg-card/60">
         <CardContent className="p-5 space-y-4">
           {/* Mode tabs */}
@@ -277,7 +275,7 @@ export function ZentaraOnePage(): React.ReactElement {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Niche / entreprise / activité
+                Niche / entreprise / activité *
               </label>
               <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="SaaS B2B, Lucca, dentistes à Paris…" />
             </div>
@@ -287,6 +285,18 @@ export function ZentaraOnePage(): React.ReactElement {
               </label>
               <Input value={needs} onChange={(e) => setNeeds(e.target.value)} placeholder="Head of Sales, recrute, refonte site…" />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Contexte business / ce que tu proposes</label>
+            <textarea
+              value={context}
+              onChange={(e) => setContext(e.target.value)}
+              placeholder="Ex : on aide les PME à automatiser leur prospection commerciale — cherche des PME en croissance qui recrutent des commerciaux…"
+              rows={2}
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-none"
+            />
+            <p className="text-[11px] text-muted-foreground">Donne plus de détails = résultats plus précis (les sources publiques sont filtrées sur ces critères).</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
