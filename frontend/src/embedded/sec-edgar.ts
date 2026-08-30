@@ -51,7 +51,7 @@ function cikPad(raw: string | number): string { return String(Number(raw)).padSt
 async function fetchSubmission(cik: string): Promise<EDGARSubmissions | null> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await fetch(`https://data.sec.gov/submissions/CIK${cik}.json`, {
+      const res = await fetch(`/api/sec/submissions/CIK${cik}.json`, {
         headers: { 'User-Agent': UA },
         signal: AbortSignal.timeout(attempt === 0 ? 8000 : 5000),
       });
@@ -117,15 +117,16 @@ export async function searchEDGAR(query: string, limit = 10): Promise<EDGARCompa
 
   try {
     // 1. EDGAR FTS → CIKs
-    const url = new URL('https://efts.sec.gov/LATEST/search-index');
+    // Proxy same-origin Vercel (/api/sec) : SEC exige un User-Agent custom
+    // (impossible en navigateur) et n'envoie pas de header CORS.
+    const url = new URL('/api/sec/LATEST/search-index', window.location.origin);
     url.searchParams.set('q', q);
     url.searchParams.set('pageSize', String(Math.min(limit * 5, 50)));
     url.searchParams.set('startDate', '2024-01-01');
     url.searchParams.set('forms', '10-K,10-Q,8-K,S-1');
 
     const res = await fetch(url, {
-      headers: { 'User-Agent': UA },
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(12_000),
     });
     if (!res.ok) throw new Error(`SEC HTTP ${res.status}`);
     const data = await res.json();
@@ -172,7 +173,7 @@ export async function searchEDGAR(query: string, limit = 10): Promise<EDGARCompa
 export async function searchEDGARByTicker(ticker: string): Promise<EDGARCompany | null> {
   try {
     // Use the company_tickers.json mapping for ticker lookup
-    const res = await fetch('https://www.sec.gov/files/company_tickers.json', {
+    const res = await fetch('/api/sec/files/company_tickers.json', {
       headers: { 'User-Agent': UA },
       signal: AbortSignal.timeout(10_000),
     });
