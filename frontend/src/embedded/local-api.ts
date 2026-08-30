@@ -244,7 +244,7 @@ const SEARCH_STOPWORDS = new Set([
 
 function searchLocal(query: string, mode: string, limit: number, needs = ''): any[] {
   const tokenize = (s: string) =>
-    String(s || '').toLowerCase().split(/[\s,;|/+&()\-]+/).map((t) => t.trim()).filter((t) => t.length >= 2 && !SEARCH_STOPWORDS.has(t));
+    String(s || '').toLowerCase().split(/[\s,;|/+&()-]+/).map((t) => t.trim()).filter((t) => t.length >= 2 && !SEARCH_STOPWORDS.has(t));
   // Mots de la niche (ex: « SaaS B2B ») ET du contexte/besoins (ex: « Competitive
   // Intelligence », « recrutent des commerciaux »). Le contexte est cherché dans les
   // champs notes/tags (signaux déjà enrichis), pas uniquement nom/secteur.

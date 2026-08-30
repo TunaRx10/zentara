@@ -1,42 +1,61 @@
 @import "tailwindcss";
 
 /*
- * Dark navy + neon lime — Zentara v2.
+ * Zentara v3 — Design System Premium
  *
- * Fond navy profond #0b0f17, cartes #111521, primary neon lime #94ff01.
- * Signature visuelle : dégradé lime→green (logo, CTA, titres .gradient-text),
- * glow lime, glass white/5, accent néon sur tous les éléments interactifs.
+ * Améliorations :
+ * - Espacement plus raffiné et cohérent
+ * - Typographie plus précise (tracking, weight)
+ * - Cards avec subtils gradients et borders
+ * - Animations plus douces
+ * - Glass morphism amélioré
+ * - Badges et pills plus détaillés
+ * - Sidebar plus pro
+ * - Tables plus lisibles
  */
+
 @theme {
-  --color-background: #0b0f17;
-  --color-foreground: #cdc6ce;
+  --color-background: #080b10;
+  --color-foreground: #e2e0e5;
 
-  --color-card: #111521;
-  --color-card-foreground: #cdc6ce;
+  --color-card: #0f1318;
+  --color-card-foreground: #e2e0e5;
 
-  --color-popover: #0b0f17;
-  --color-popover-foreground: #cdc6ce;
+  --color-popover: #080b10;
+  --color-popover-foreground: #e2e0e5;
 
-  --color-primary: #94ff01; /* Neon lime — accent signature */
-  --color-primary-foreground: #0b0f17;
+  --color-primary: #94ff01;
+  --color-primary-foreground: #080b10;
 
-  --color-secondary: #161a24;
-  --color-secondary-foreground: #cdc6ce;
+  --color-secondary: #141820;
+  --color-secondary-foreground: #c8ccd4;
 
-  --color-muted: #161a24;
-  --color-muted-foreground: #8b909a;
+  --color-muted: #141820;
+  --color-muted-foreground: #7a8090;
 
-  --color-accent: #a3ff2e; /* Lime bright — highlights */
-  --color-accent-foreground: #0b0f17;
+  --color-accent: #a3ff2e;
+  --color-accent-foreground: #080b10;
 
   --color-destructive: #ef4444;
   --color-destructive-foreground: #ffffff;
 
-  --color-border: #1f2937;
-  --color-input: #161a24;
-  --color-ring: #94ff01; /* Neon lime — bordures focus */
+  --color-border: #1a1f2a;
+  --color-input: #141820;
+  --color-ring: #94ff01;
 
-  /* Neon lime scale for Tailwind bg-lime-* / text-lime-* */
+  /* Extended palette */
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-amber-400: #fbbf24;
+  --color-amber-500: #f59e0b;
+  --color-red-400: #f87171;
+  --color-red-500: #ef4444;
+  --color-blue-400: #60a5fa;
+  --color-blue-500: #3b82f6;
+  --color-purple-400: #c084fc;
+  --color-purple-500: #a855f7;
+
+  /* Lime scale */
   --color-lime-300: #b8ff5c;
   --color-lime-400: #a3ff2e;
   --color-lime-500: #94ff01;
@@ -45,10 +64,8 @@
   --color-lime-900: #2e5000;
 }
 
-/* Round 130 — anti-flash au boot (fond sombre). On fige directement
-   la couleur de fond sur <html> pour éviter un frame blanc quand
-   l'APK démarre sur Android ou que le SW sert un cache obsolète. */
-html, body { background-color: #0b0f17; color: #cdc6ce; }
+/* Anti-flash au boot */
+html, body { background-color: #080b10; color: #e2e0e5; }
 
 @layer base {
   * {
@@ -56,9 +73,129 @@ html, body { background-color: #0b0f17; color: #cdc6ce; }
   }
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
+
+/* =================================================================
+   TYPOGRAPHIE PREMIUM
+   ================================================================= */
+
+.gradient-text {
+  background-image: linear-gradient(135deg, #94ff01 0%, #a3ff2e 50%, #7ad600 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.gradient-text-warm {
+  background-image: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.gradient-text-cool {
+  background-image: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* =================================================================
+   CARDS PREMIUM
+   ================================================================= */
+
+.card-premium {
+  background: linear-gradient(135deg, rgba(15, 19, 24, 1) 0%, rgba(12, 15, 20, 1) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 1rem;
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.3),
+    0 2px 4px -2px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-premium:hover {
+  border-color: rgba(148, 255, 1, 0.15);
+  box-shadow: 
+    0 10px 15px -3px rgba(0, 0, 0, 0.4),
+    0 4px 6px -4px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 30px rgba(148, 255, 1, 0.03);
+  transform: translateY(-1px);
+}
+
+.card-highlight {
+  background: linear-gradient(135deg, rgba(148, 255, 1, 0.08) 0%, rgba(15, 19, 24, 1) 40%);
+  border: 1px solid rgba(148, 255, 1, 0.2);
+  box-shadow: 0 0 20px rgba(148, 255, 1, 0.05);
+}
+
+/* =================================================================
+   GLASS MORPHISME AMÉLIORÉ
+   ================================================================= */
+
+.glass {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-strong {
+  background: rgba(15, 19, 24, 0.85);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* =================================================================
+   BADGES & PILLS
+   ================================================================= */
+
+.badge-tier-hot {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(52, 211, 153, 0.1) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+
+.badge-tier-warm {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(251, 191, 36, 0.1) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+
+.badge-tier-cold {
+  background: linear-gradient(135deg, rgba(107, 114, 128, 0.15) 0%, rgba(156, 163, 175, 0.1) 100%);
+  border: 1px solid rgba(107, 114, 128, 0.3);
+  color: #9ca3af;
+}
+
+.badge-score-high {
+  background: linear-gradient(135deg, rgba(148, 255, 1, 0.2) 0%, rgba(163, 255, 46, 0.1) 100%);
+  border: 1px solid rgba(148, 255, 1, 0.3);
+  color: #94ff01;
+}
+
+.badge-score-mid {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(251, 191, 36, 0.08) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #fbbf24;
+}
+
+.badge-score-low {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(248, 113, 113, 0.06) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+/* =================================================================
+   ANIMATIONS DOUCES
+   ================================================================= */
 
 @keyframes gradient {
   0% { background-position: 0% 50%; }
@@ -71,73 +208,153 @@ html, body { background-color: #0b0f17; color: #cdc6ce; }
   animation: gradient 4s linear infinite;
 }
 
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
-  20%, 40%, 60%, 80% { transform: translateX(6px); }
-}
-
-.animate-shake {
-  animation: shake 0.5s ease-in-out;
-}
-
 @keyframes float-slow {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-12px); }
+  50% { transform: translateY(-8px); }
 }
 
 .animate-float-slow {
   animation: float-slow 6s ease-in-out infinite;
 }
 
-/* Neon lime gradient signature */
-.gradient-text {
-  background-image: linear-gradient(90deg, #94ff01, #a3ff2e);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 15px rgba(148, 255, 1, 0.1); }
+  50% { box-shadow: 0 0 30px rgba(148, 255, 1, 0.2); }
 }
 
-.gradient-border {
-  position: relative;
-}
-.gradient-border::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 0.5rem;
-  padding: 1px;
-  background: linear-gradient(90deg, #94ff01, #7ad600);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
 }
 
-.glow-blue {
-  box-shadow: 0 0 20px rgba(148, 255, 1, 0.25);
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fade-in-scale {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-scale {
+  animation: fade-in-scale 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* =================================================================
+   GLOW EFFECTS
+   ================================================================= */
+
+.glow-lime {
+  box-shadow: 0 0 24px rgba(148, 255, 1, 0.2);
+}
+
+.glow-lime-strong {
+  box-shadow: 0 0 40px rgba(148, 255, 1, 0.3), 0 0 80px rgba(148, 255, 1, 0.1);
 }
 
 .glow-emerald {
-  box-shadow: 0 0 20px rgba(148, 255, 1, 0.25);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
 }
 
-.glow-lime {
-  box-shadow: 0 0 24px rgba(148, 255, 1, 0.30);
+.glow-amber {
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.25);
 }
 
-/* Glassmorphism helper (dark) — KeeLead : white/5 + border white/10 */
-.glass {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+.glow-red {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.25);
 }
 
-/* Sparkline (Round 22) — hover behavior sur chaque point.
-   Le dot grossit au hover de son <g> parent pour rendre
-   le tooltip natif (`<title>`) plus lisible.
-   Le hit-area transparent est plus large pour faciliter le mouseover. */
+/* =================================================================
+   SCROLLBARS PREMIUM
+   ================================================================= */
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #2a2f3a;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover { background: #3a4050; }
+
+/* =================================================================
+   TABLES PREMIUM
+   ================================================================= */
+
+.table-premium {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table-premium thead th {
+  background: linear-gradient(180deg, rgba(20, 24, 32, 0.8) 0%, rgba(15, 19, 24, 0.6) 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0.75rem 1rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7a8090;
+  position: sticky;
+  top: 0;
+  backdrop-filter: blur(8px);
+}
+
+.table-premium tbody tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  transition: all 0.2s ease;
+}
+
+.table-premium tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.table-premium tbody td {
+  padding: 0.875rem 1rem;
+  font-size: 0.875rem;
+  vertical-align: middle;
+}
+
+/* =================================================================
+   SIDEBAR PREMIUM
+   ================================================================= */
+
+.sidebar-section {
+  position: relative;
+}
+
+.sidebar-section::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, transparent, rgba(148, 255, 1, 0.3), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar-section.active::before {
+  opacity: 1;
+}
+
+/* =================================================================
+   DIVIDER GRADIENT
+   ================================================================= */
+
+.divider-gradient {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+}
+
+/* =================================================================
+   SPARKLINE
+   ================================================================= */
+
 .spark-point-group {
   cursor: crosshair;
 }
@@ -148,17 +365,13 @@ html, body { background-color: #0b0f17; color: #cdc6ce; }
   r: 1.4;
   opacity: 1;
 }
-.spark-point-group .spark-hit {
-  /* Laisse passer l'event jusqu'au `<g>` parent — le browser prend
-     en compte la zone <circle> fill="transparent" pour le hover natif.
-     Cela rend le tooltip plus facile à déclencher sans grossir le dot. */
-}
 
-/* Smooth scrollbars — KeeLead : thumb neutre */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: #333;
-  border-radius: 3px;
+/* =================================================================
+   INPUT PREMIUM
+   ================================================================= */
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: rgba(148, 255, 1, 0.4) !important;
+  box-shadow: 0 0 0 3px rgba(148, 255, 1, 0.08);
 }
-::-webkit-scrollbar-thumb:hover { background: #555; }

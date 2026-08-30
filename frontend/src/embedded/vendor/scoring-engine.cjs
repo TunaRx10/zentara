@@ -152,7 +152,7 @@ function evalSiteProfile(input) {
       { cta: p.main_cta || null, cta_count: p.cta_count || 0 }),
     c('has_contact_form', !!p.contact_form,
       { has_form: !!p.contact_form, form_count: p.form_count || 0 }),
-    c('has_booking_or_quote', !!p.booking_quote ? 1 : (p.has_booking ? 1 : 0),
+    c('has_booking_or_quote', p.booking_quote ? 1 : (p.has_booking ? 1 : 0),
       { booking_url: p.booking_quote || p.booking_url || null }),
     c('has_payment_system', !!p.payment_system,
       { payment_url: p.payment_system || null }),
@@ -168,7 +168,7 @@ function evalSiteProfile(input) {
 function evalAutomation(input) {
   const p = input.site_profile || {};
   return [
-    c('automations_detected', !!p.automations ? 1 : 0,
+    c('automations_detected', p.automations ? 1 : 0,
       { automations: Array.isArray(p.automations) ? p.automations : [] }),
     c('has_forms_count', linear(p.form_count || 0, 1, 5),
       { form_count: p.form_count || 0 }),

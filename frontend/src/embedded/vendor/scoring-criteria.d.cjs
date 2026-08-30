@@ -1,2 +1,2 @@
 declare const scoringCriteria: any;
-export = scoringCriteria;
+export = scoringCriteria;;

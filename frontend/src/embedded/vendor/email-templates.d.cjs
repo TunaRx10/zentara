@@ -1,2 +1,2 @@
 declare const emailTemplates: any;
-export = emailTemplates;
+export = emailTemplates;;

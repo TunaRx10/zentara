@@ -1,2 +1,2 @@
 declare const scoringEngine: any;
-export = scoringEngine;
+export = scoringEngine;;

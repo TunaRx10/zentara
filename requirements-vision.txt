@@ -1,0 +1,7 @@
+# requirements-vision.txt — Dépendances pour le module de vision Zentara
+# Installation : pip install -r requirements-vision.txt
+
+torch>=2.0.0
+transformers>=4.40.0
+pillow>=10.0.0
+requests>=2.31.0

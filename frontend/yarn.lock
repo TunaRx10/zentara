@@ -24,10 +24,20 @@
   resolved "https://registry.npmjs.org/@capacitor/android/-/android-8.5.0.tgz"
   integrity sha512-Rb3prJeQiTp0pQhSSOReJuG9VgibOGMG4ECs+UhMwr6TCCHZ3NCZO811bDA0HxD0xrT/gCrJAsY5yfEATu84JQ==
 
-"@capacitor/app@^8.0.0":
+"@capacitor/app@^8.0.0", "@capacitor/app@^8.1.1":
   version "8.1.1"
   resolved "https://registry.npmjs.org/@capacitor/app/-/app-8.1.1.tgz"
   integrity sha512-xM2ZTX5jK60tFtmjsmJv+Cdj1Qsb6NcavkqmdEnCPQBeya9oKhamZJxYOnQNj1ZvcJM7sWfG6BEtSLx42pisbA==
+
+"@capacitor/browser@^8.0.4":
+  version "8.0.4"
+  resolved "https://registry.npmjs.org/@capacitor/browser/-/browser-8.0.4.tgz"
+  integrity sha512-ORZ4u/y+7aMuu6yVuk6SP529fUZyqcbnuHB1q5McpA3o2SYfVoi28iB8rsQjI2ad1qlKJd29ZUuGtspXLBDlWg==
+
+"@capacitor/camera@^8.2.3":
+  version "8.2.3"
+  resolved "https://registry.npmjs.org/@capacitor/camera/-/camera-8.2.3.tgz"
+  integrity sha512-x9Pl5UgvrZyU5Hl53Fly9f6u019hhgN+gSdDgi+WygxK9DUVuYKjigplOXz3VJQ9m8ttUSjqN/rAC3JVnyEzcA==
 
 "@capacitor/cli@^8.5.0":
   version "8.5.0"
@@ -53,6 +63,11 @@
     xcode "^3.0.1"
     xml2js "^0.6.2"
 
+"@capacitor/clipboard@^8.0.1":
+  version "8.0.1"
+  resolved "https://registry.npmjs.org/@capacitor/clipboard/-/clipboard-8.0.1.tgz"
+  integrity sha512-iOlbTi8MojKyLnYE+M27priXid7vHd0PlDwyHohPzkuQ8Rkp6q7ykwZmPEUD+OnU/Ink7Qw/pUOfKgraKmA6Eg==
+
 "@capacitor/core@^8.0.2", "@capacitor/core@^8.5.0", "@capacitor/core@>=8.0.0":
   version "8.5.0"
   resolved "https://registry.npmjs.org/@capacitor/core/-/core-8.5.0.tgz"
@@ -60,15 +75,79 @@
   dependencies:
     tslib "^2.1.0"
 
+"@capacitor/device@^8.0.3":
+  version "8.0.3"
+  resolved "https://registry.npmjs.org/@capacitor/device/-/device-8.0.3.tgz"
+  integrity sha512-rliPCCZwxtjU6200jJNDAsQhioyozV3fGgiP+NgRqtDOI7i+Jdz+DYNwEup+3MGZZ4NEmkuFaBeWLM3T01vJRg==
+
+"@capacitor/filesystem@^8.1.3":
+  version "8.1.3"
+  resolved "https://registry.npmjs.org/@capacitor/filesystem/-/filesystem-8.1.3.tgz"
+  integrity sha512-GNBlRkaXEEb+6WP/YsDXr2zygyOHoieuye6viyd2ZkEdBwfseG41jxfarVxLWH0r0owhyNUbwJ/Qi8fubqr6wA==
+  dependencies:
+    "@capacitor/synapse" "^1.0.4"
+
+"@capacitor/geolocation@^8.2.2":
+  version "8.2.2"
+  resolved "https://registry.npmjs.org/@capacitor/geolocation/-/geolocation-8.2.2.tgz"
+  integrity sha512-X8ryw6CfL4LspJnnfVL4++DUKKZVfdUIA9JljWVRljEDIQxZQZtz6xf7qstht+ymc+le6oa5EaUChVA6KsCYlA==
+  dependencies:
+    "@capacitor/synapse" "^1.0.4"
+
+"@capacitor/haptics@^8.0.2":
+  version "8.0.2"
+  resolved "https://registry.npmjs.org/@capacitor/haptics/-/haptics-8.0.2.tgz"
+  integrity sha512-c2hZzRR5Fk1tbTvhG1jhh2XBAf3EhnIerMIb2sl7Mt41Gxx1fhBJFDa0/BI1IbY4loVepyyuqNC9820/GZuoWQ==
+
 "@capacitor/ios@^8.0.2":
   version "8.5.0"
   resolved "https://registry.npmjs.org/@capacitor/ios/-/ios-8.5.0.tgz"
   integrity sha512-7k1TfohJu5BzRXc1F3g04Q8QQ0fyQgms6h1AvhnHb04VaNr9EdHOx03hL8O+OigEKMQnyJd1ZOjTPPNHCqL5Yw==
 
+"@capacitor/keyboard@^8.0.5":
+  version "8.0.5"
+  resolved "https://registry.npmjs.org/@capacitor/keyboard/-/keyboard-8.0.5.tgz"
+  integrity sha512-oFXygC4eKYA5l2MdpTR06L2M/4x6e2SLD5yS1T9+UBDKTkzyvhWKEhbYLUaTIBPpLKqlfGudJw1X73S1H9eUzQ==
+
+"@capacitor/local-notifications@^8.3.1":
+  version "8.3.1"
+  resolved "https://registry.npmjs.org/@capacitor/local-notifications/-/local-notifications-8.3.1.tgz"
+  integrity sha512-F7zu/+p/mIR958YP4axOkeI5hBKRaXDyYjbNPrAil2wWfd7OxScPSTvP9t85NpQ0eULVRu0/sntoxOg6ck477A==
+
+"@capacitor/network@^8.0.1":
+  version "8.0.1"
+  resolved "https://registry.npmjs.org/@capacitor/network/-/network-8.0.1.tgz"
+  integrity sha512-9xK/FHFmzKGanB6BdoSZOzXk8vF0OFVQSQ4PAsIrzAzLuXHryO317qy8dcHVpgxYeuZq2noI0My9z1DvVDi/9w==
+
 "@capacitor/preferences@^8.0.1":
   version "8.0.1"
   resolved "https://registry.npmjs.org/@capacitor/preferences/-/preferences-8.0.1.tgz"
   integrity sha512-T6no3ebi79XJCk91U3Jp/liJUwgBdvHR+s6vhvPkPxSuch7z3zx5Rv1bdWM6sWruNx+pViuEGqZvbfCdyBvcHQ==
+
+"@capacitor/push-notifications@^8.1.2":
+  version "8.1.2"
+  resolved "https://registry.npmjs.org/@capacitor/push-notifications/-/push-notifications-8.1.2.tgz"
+  integrity sha512-TQl4XxqJfNF+KbSYBFMXYYT5WXUaleVKXlByhh/8+KySMVNjp+l5OqAUoGe/sY1IAnGXEuUeCjA/WLZEVvGwrA==
+
+"@capacitor/share@^8.0.1":
+  version "8.0.1"
+  resolved "https://registry.npmjs.org/@capacitor/share/-/share-8.0.1.tgz"
+  integrity sha512-3cSBKBCJVon54rKDROP2rqGyeGks4pBh9TbaEk9S375Kbek/ZHe72N50zIa0Vn9Eac/SuhwgehO/mmA4CsUOiw==
+
+"@capacitor/splash-screen@^8.0.2":
+  version "8.0.2"
+  resolved "https://registry.npmjs.org/@capacitor/splash-screen/-/splash-screen-8.0.2.tgz"
+  integrity sha512-0C6rYScr13WfAE9nPl4ScOQynmjFv9NT3Th+RZkD4ezYHmER6mcl1/lDYsv7jg3Rj3FOvLrlTlmNkUrr83kZzQ==
+
+"@capacitor/status-bar@^8.0.3":
+  version "8.0.3"
+  resolved "https://registry.npmjs.org/@capacitor/status-bar/-/status-bar-8.0.3.tgz"
+  integrity sha512-csSpfNeN49Hx9JaQBSJEIiEbOLtXg3kcc2IpScq2fu5L520h3AWEvsxoH8Srk1jxfRKepaJ4S4sqSC3foI4AgA==
+
+"@capacitor/synapse@^1.0.4":
+  version "1.0.4"
+  resolved "https://registry.npmjs.org/@capacitor/synapse/-/synapse-1.0.4.tgz"
+  integrity sha512-/C1FUo8/OkKuAT4nCIu/34ny9siNHr9qtFezu4kxm6GY1wNFxrCFWjfYx5C1tUhVGz3fxBABegupkpjXvjCHrw==
 
 "@floating-ui/core@^1.8.0":
   version "1.8.0"
@@ -234,10 +313,10 @@
   resolved "https://registry.npmjs.org/@oxc-project/types/-/types-0.143.0.tgz"
   integrity sha512-u6JZdLBTLotrNC9Vd6vPssINdzcCzleKAH6EJKImQb7GtYvX5keN2dxkoK44stCc4tffE6QQRtZTXVSzsLUlWA==
 
-"@oxlint/binding-linux-x64-gnu@1.78.0":
+"@oxlint/binding-win32-x64-msvc@1.78.0":
   version "1.78.0"
-  resolved "https://registry.npmjs.org/@oxlint/binding-linux-x64-gnu/-/binding-linux-x64-gnu-1.78.0.tgz"
-  integrity sha512-rRdISSYegj6VganMZ9tjRjijowfHJ09IZU01i0toBAqr6n5LEtwHq2IeS4FjW2RoskOHlb6efB26H5izYb3GEQ==
+  resolved "https://registry.npmjs.org/@oxlint/binding-win32-x64-msvc/-/binding-win32-x64-msvc-1.78.0.tgz"
+  integrity sha512-Sb5ocmLSuYeOuXd+CFOToGKp/gjXUEWDnvIGwhnh8aq8wY4TMmEnKnvbogSW7RdMZv77JSARduS7/gv+khYEjA==
 
 "@radix-ui/number@1.1.3":
   version "1.1.3"
@@ -603,20 +682,20 @@
     redux-thunk "^3.1.0"
     reselect "^5.1.0"
 
-"@rolldown/binding-linux-x64-gnu@1.2.3":
+"@rolldown/binding-win32-x64-msvc@1.2.3":
   version "1.2.3"
-  resolved "https://registry.npmjs.org/@rolldown/binding-linux-x64-gnu/-/binding-linux-x64-gnu-1.2.3.tgz"
-  integrity sha512-TytMwF2KVGqP2tgd0I1OY0PAv78dZRAYcF5ssDzjM34SUXCED3uXvSd5+lHoC0bTD6eEdFz7LdQNCO1y0oVk9w==
+  resolved "https://registry.npmjs.org/@rolldown/binding-win32-x64-msvc/-/binding-win32-x64-msvc-1.2.3.tgz"
+  integrity sha512-ekcqMMkI2PlhYnfzQnB/cEdYUVVJViWvoUyLrbzgDoi3Snfc1mVBwdnc306ufA5ejy8JSPjT2RlW1nQSjW7efg==
 
 "@rolldown/pluginutils@^1.0.0", "@rolldown/pluginutils@^1.0.1":
   version "1.0.1"
   resolved "https://registry.npmjs.org/@rolldown/pluginutils/-/pluginutils-1.0.1.tgz"
   integrity sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==
 
-"@rollup/rollup-linux-x64-gnu@4.44.0":
+"@rollup/rollup-win32-x64-msvc@4.44.0":
   version "4.44.0"
-  resolved "https://registry.npmjs.org/@rollup/rollup-linux-x64-gnu/-/rollup-linux-x64-gnu-4.44.0.tgz"
-  integrity sha512-iUVJc3c0o8l9Sa/qlDL2Z9UP92UZZW1+EmQ4xfjTc1akr0iUFZNfxrXJ/R1T90h/ILm9iXEY6+iPrmYB3pXKjw==
+  resolved "https://registry.npmjs.org/@rollup/rollup-win32-x64-msvc/-/rollup-win32-x64-msvc-4.44.0.tgz"
+  integrity sha512-Q2Mgwt+D8hd5FIPUuPDsvPR7Bguza6yTkJxspDGkZj7tBRn2y4KSWYuIXpftFSjBra76TbKerCV7rgFPQrn+wQ==
 
 "@standard-schema/spec@^1.0.0":
   version "1.1.0"
@@ -655,10 +734,10 @@
     source-map-js "^1.2.1"
     tailwindcss "4.3.3"
 
-"@tailwindcss/oxide-linux-x64-gnu@4.3.3":
+"@tailwindcss/oxide-win32-x64-msvc@4.3.3":
   version "4.3.3"
-  resolved "https://registry.npmjs.org/@tailwindcss/oxide-linux-x64-gnu/-/oxide-linux-x64-gnu-4.3.3.tgz"
-  integrity sha512-tx7us1muwOKAKWao2v/GaafFeQboE6aj88vC6ziN2NCGcRm8gWUhwjzg+YdVB1e4boAtdtma4L43onunI6NS4w==
+  resolved "https://registry.npmjs.org/@tailwindcss/oxide-win32-x64-msvc/-/oxide-win32-x64-msvc-4.3.3.tgz"
+  integrity sha512-yJ0pwIVc/nYeGoV02WtsN8KYyLQv7kyI2wDnkezyJlGGjkd4QLwDGAwl47YpPJeuI0M0ObaXGSPjvWDPeTPggw==
 
 "@tailwindcss/oxide@4.3.3":
   version "4.3.3"
@@ -1242,15 +1321,15 @@ lie@3.1.1:
   dependencies:
     immediate "~3.0.5"
 
-lightningcss-linux-x64-gnu@1.32.0:
+lightningcss-win32-x64-msvc@1.32.0:
   version "1.32.0"
-  resolved "https://registry.npmjs.org/lightningcss-linux-x64-gnu/-/lightningcss-linux-x64-gnu-1.32.0.tgz"
-  integrity sha512-V7Qr52IhZmdKPVr+Vtw8o+WLsQJYCTd8loIfpDaMRWGUZfBOYEJeyJIkqGIDMZPwPx24pUMfwSxxI8phr/MbOA==
+  resolved "https://registry.npmjs.org/lightningcss-win32-x64-msvc/-/lightningcss-win32-x64-msvc-1.32.0.tgz"
+  integrity sha512-Amq9B/SoZYdDi1kFrojnoqPLxYhQ4Wo5XiL8EVJrVsB8ARoC1PWW6VGtT0WKCemjy8aC+louJnjS7U18x3b06Q==
 
-lightningcss-linux-x64-gnu@1.33.0:
+lightningcss-win32-x64-msvc@1.33.0:
   version "1.33.0"
-  resolved "https://registry.npmjs.org/lightningcss-linux-x64-gnu/-/lightningcss-linux-x64-gnu-1.33.0.tgz"
-  integrity sha512-ar+Ju7LmcN0Jo4FpL4hpFybwNG9/3A/Br5KW2n2jyODg3MEZXaDYADdemoNS+BDNfMgKvylJLj4S5tyRActuAg==
+  resolved "https://registry.npmjs.org/lightningcss-win32-x64-msvc/-/lightningcss-win32-x64-msvc-1.33.0.tgz"
+  integrity sha512-OlEICDx/Xl0FqSp4bry8zFnCvGpig3Gl4gCquvYwHuqJKEC1+n9NgDniFvqHGmMv1ZkqDJrDqKKSykTDX+ehuA==
 
 lightningcss@^1.33.0:
   version "1.33.0"
