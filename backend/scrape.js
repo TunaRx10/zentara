@@ -224,19 +224,67 @@ async function getCompanyRegistry() {
 
 /** Recherche une société US cotée par nom/ticker. Retourne jusqu'à `limit` résultats. */
 async function searchEdgar(query, limit = 10) {
-  const q = String(query || '').trim().toLowerCase();
-  if (!q) return [];
+  const q = String(query || '').trim();
+  if (q.length < 2) return [];
+  // API LIVE EDGAR Full-Text Search (vs registre statique local) : vrais dépôts
+  // 10-K/10-Q/8-K/S-1 → vraies sociétés cotées, fonctionne depuis toute IP
+  // (User-Agent requis par SEC).
+  try {
+    const url = new URL('https://efts.sec.gov/LATEST/search-index');
+    url.searchParams.set('q', q);
+    url.searchParams.set('pageSize', String(Math.min(limit * 3, 50)));
+    url.searchParams.set('startDate', '2020-01-01');
+    url.searchParams.set('forms', '10-K,10-Q,8-K,S-1');
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Zentara/1.0 (contact@zentara.app)', Accept: 'application/json' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const hits = (data && data.hits && data.hits.hits) || [];
+      const out = [];
+      const seen = new Set();
+      for (const h of hits) {
+        const src = h._source || {};
+        const ciks = (src.ciks || []).map((c) => String(Number(c)).padStart(10, '0'));
+        const disp = String(src.entity_names?.[0] || src.display_names?.[0] || '');
+        const m = disp.match(/^(.+?)\s*\(([A-Z0-9.\-]+)\)\s*\(CIK\s+(\d+)\)/i);
+        const name = (m ? m[1] : disp).replace(/^['"\s]+|['"\s]+$/g, '').trim();
+        const cik = ciks[0] || (m ? String(Number(m[3])).padStart(10, '0') : null);
+        if (!name || seen.has(name.toLowerCase())) continue;
+        seen.add(name.toLowerCase());
+        out.push({
+          source: 'sec-edgar',
+          name,
+          ticker: m ? m[2] : null,
+          cik,
+          company_number: cik,
+          jurisdiction: 'US',
+          incorporation_date: null,
+          url: cik
+            ? `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}`
+            : null,
+          matched_on: q,
+        });
+        if (out.length >= limit) break;
+      }
+      if (out.length > 0) return out;
+    }
+  } catch { /* fallback registre local */ }
+
+  // Fallback : registre statique local si l'API est injoignable.
   const list = await getCompanyRegistry();
   const scored = [];
+  const ql = q.toLowerCase();
   for (const c of list) {
-    const name = c.name.toLowerCase();
-    const ticker = c.ticker.toLowerCase();
+    const name = String(c.name || '').toLowerCase();
+    const ticker = String(c.ticker || '').toLowerCase();
     let score = 0;
-    if (name === q || ticker === q) score = 100;
-    else if (name.startsWith(q)) score = 80;
-    else if (name.includes(q)) score = 60;
-    else if (ticker.startsWith(q)) score = 70;
-    else if (q.length >= 3 && (name.includes(q) || ticker.includes(q))) score = 40;
+    if (name === ql || ticker === ql) score = 100;
+    else if (name.startsWith(ql)) score = 80;
+    else if (name.includes(ql)) score = 60;
+    else if (ticker.startsWith(ql)) score = 70;
+    else if (ql.length >= 3 && name.includes(ql)) score = 40;
     if (score > 0) scored.push({ ...c, score });
   }
   scored.sort((a, b) => b.score - a.score);

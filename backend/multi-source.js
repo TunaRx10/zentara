@@ -32,6 +32,14 @@ function freeSources() {
  *   - géo Overpass (openstreetmap — géré séparément par le mode local)
  * pour ne remonter QUE des sociétés/entités prospectables.
  */
+// Registres officiels / annuaires de vraies sociétés → bonus de score avant tri.
+const REGISTRY_SOURCES = new Set([
+  'sec-edgar', 'opencorporates', 'companies-house', 'builtin', 'builtwith',
+  'openstreetmap', 'yelp', 'yellowpages', 'bbb', 'chamberofcommerce',
+  'eu-register', 'samgov', 'usaspending', 'census', 'wikidata', 'trademarks',
+  'patents', 'indiehackers', 'betalist', 'f6s', 'gust', 'producthunt',
+]);
+
 const BUSINESS_SOURCE_CATEGORIES = new Set(['company', 'local', 'government', 'startup', 'professional']);
 const BUSINESS_EXTRA_IDS = new Set(['github-orgs']); // orgs GitHub = vraies sociétés (souvent SaaS)
 const NON_BUSINESS_SOURCE_IDS = new Set(['openstreetmap', 'linkedin', 'linkedin-live', 'xing']);
@@ -194,7 +202,13 @@ async function rankByNiche(q, hits) {
   for (const h of hits) {
     const r = byName.get(String(h.name || '').toLowerCase());
     if (!r) { out.push(h); continue; } // non jugé → conservé
-    if (r.keep === false) continue; // hors-niche → écarté
+    if (r.keep === false) {
+      // Hors-niche selon l'IA → déclassé, JAMAIS supprimé (le filtre aval
+      // engine.js/cleanResults reste seul juge du bruit).
+      h.score = 30;
+      out.push(h);
+      continue;
+    }
     const rel = Number(r.relevance);
     if (Number.isFinite(rel)) h.score = Math.round(rel);
     if (r.sector) h.sector = String(r.sector);
@@ -243,7 +257,8 @@ async function runSearch(q, opts = {}) {
               // Clés optionnelles injectées aux sources qui les supportent (ex: OpenCorporates)
               apiToken: apiKeys.opencorporates || undefined,
             })).catch(() => []),
-            new Promise((res) => setTimeout(() => res([]), 3000)),
+            // SEC EDGAR fait FTS + lookups (2-5s) → budget 6s ; les autres 3s.
+            new Promise((res) => setTimeout(() => res([]), s.id === 'sec-edgar' ? 6000 : 3000)),
           ]);
           return (items || []).map((l) => toHit(s.id, l));
         },
@@ -289,6 +304,10 @@ async function runSearch(q, opts = {}) {
       }
       sourcesUsed.add(r.value.tag);
       for (const h of r.value.hits || []) {
+        if (process.env.DEBUG_SEC && r.value.tag === 'sec-edgar') {
+          const why = !looksLikeCompany(h) ? 'looksLikeCompany' : (q && String(h.name || '').toLowerCase().trim() === String(q).toLowerCase().trim() ? 'echo-query' : seen.has(String(h.name || '').toLowerCase().trim()) ? 'seen-doublon' : null);
+          if (why) console.log('[debug] rejeté (' + why + '):', h.name);
+        }
         if (!looksLikeCompany(h)) continue;
         // Écho de la requête : une « entreprise » dont le nom est exactement la niche recherchée.
         if (q && String(h.name || '').toLowerCase().trim() === String(q).toLowerCase().trim()) continue;
@@ -308,6 +327,13 @@ async function runSearch(q, opts = {}) {
   }
 
   results = await rankByNiche(q, results);
+  // Boost des registres officiels avant le tri : une vraie société cotée/registrée
+  // (SEC, OpenCorporates, Companies House…) doit primer sur un profil github.
+  for (const h of results) {
+    if (REGISTRY_SOURCES.has(String(h.source || ''))) {
+      h.score = Math.min(100, Number(h.score) || 0 + 12);
+    }
+  }
   results.sort((a, b) => (b.score || 0) - (a.score || 0));
   return {
     results: results.slice(0, limit),
