@@ -7,7 +7,8 @@ export default async function handler(req, res) {
     // /api/sec/LATEST/search-index → https://efts.sec.gov/LATEST/search-index
     // /api/sec/submissions/CIK0000320193.json → https://data.sec.gov/submissions/...
     // /api/sec/files/company_tickers.json → https://www.sec.gov/files/...
-    const rest = reqUrl.pathname.replace(/^\/api\/sec\/?/, '');
+    // Le rewrite Vercel /api/sec/(.*) → /api/sec?zentara_path=$1 transmet le chemin ici.
+    const rest = reqUrl.searchParams.get('zentara_path') || reqUrl.pathname.replace(/^\/api\/sec\/?/, '');
     let host = 'https://efts.sec.gov';
     if (rest.startsWith('submissions/')) host = 'https://data.sec.gov';
     if (rest.startsWith('files/')) host = 'https://www.sec.gov';
