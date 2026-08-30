@@ -132,7 +132,12 @@ class ApiClient {
     //   - Mode distant (URL serveur configurée) : réseau d'abord, repli
     //     local si le serveur est injoignable (l'app ne meurt jamais).
     // =====================================================================
-    const embeddedFirst = isEmbeddedMode();
+    // La recherche moteur (/engine/*) passe TOUJOURS par le routeur embarqué :
+    // il fusionne le backend (39 sources, LinkedIn) avec SEC EDGAR + OSM en
+    // direct depuis le navigateur si le backend renvoie peu ou rien (IP
+    // datacenter = sources web souvent bloquées). Les autres routes suivent
+    // le mode global (réseau d'abord si un backend est configuré).
+    const embeddedFirst = isEmbeddedMode() || path.startsWith('/engine/');
     const localAttempt = async (): Promise<T | undefined> => {
       try {
         const local = await handleLocalRequest(method, path, body);
