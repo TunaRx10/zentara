@@ -1,5 +1,4 @@
 {
-  "outputDirectory": "dist",
   "rewrites": [
     { "source": "/api/backend/(.*)", "destination": "https://zentara-backend.onrender.com/api/$1" },
     { "source": "/((?!api/|assets/|favicon|manifest|sw.js|boot-guard.js).*)", "destination": "/index.html" }
