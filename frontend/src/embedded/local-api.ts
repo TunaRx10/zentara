@@ -21,6 +21,12 @@ import {
 import { createLocalJob, getJob, listJobs, cancelLocalJob, retryLocalJob, type LocalJob } from './jobs';
 import { searchOverpass, searchOverpassByKeyword, geocodeNominatim, type OSMResult } from './overpass';
 import { searchEDGAR, searchEDGARByTicker, type EDGARCompany } from './sec-edgar';
+import {
+  resolveProvider,
+  getAllProviders,
+  callProviderChat,
+  buildStubReply,
+} from './ai-provider';
 
 export interface LocalError {
   code: string;
@@ -33,6 +39,15 @@ export interface LocalRouteResult {
   data?: unknown;
   error?: LocalError;
 }
+
+const CHAT_SYSTEM_PROMPT = [
+  'Tu es Zentara, le copilote stratégique d’intelligence business.',
+  'Tu aides à identifier les besoins, les opportunités et les risques d’une entreprise,',
+  'à structurer une analyse (Business, Marché, SEO, Ventes, Réputation, Technologie, Risque),',
+  'et à produire des recommandations concrètes et des emails sourcés sur les preuves du dossier.',
+  'Réponds en français, de façon concise, structurée (sections, listes) et factuelle.',
+  'Dans le doute, distingue clairement faits observés et estimations/pistes.',
+].join(' ');
 
 const ok = (data: unknown): LocalRouteResult => ({ handled: true, data });
 const fail = (code: string, message: string, status = 400): LocalRouteResult => ({
@@ -1265,8 +1280,76 @@ export async function handleLocalRequest(method: string, path: string, body?: un
 
   // ---------- Chat ----------
   if (a === 'chat') {
-    if (b === 'status') return ok({ provider: 'local', model: 'zentara-embedded-v1', mode: 'embedded' });
-    if (b === 'messages') return ok([]);
+    const chatRows = (): any[] =>
+      embStore
+        .list<any>('chat_messages')
+        .sort((x, y) => String(y.created_at).localeCompare(String(x.created_at)));
+    if (b === 'status') {
+      const r = resolveProvider();
+      const providers = getAllProviders().map((p) => ({
+        id: p.id,
+        label: p.label,
+        configured: p.configured,
+        models: p.models,
+      }));
+      if (!r) {
+        return ok({ provider: 'none', model: 'aucun — configurer une clé IA', providers, mode: 'embedded' });
+      }
+      return ok({ provider: r.provider.id, model: r.model, providers, mode: 'embedded' });
+    }
+    if (b === 'messages') {
+      if (m === 'DELETE') {
+        for (const row of embStore.list<any>('chat_messages')) embStore.remove('chat_messages', row.id);
+        return ok({ deleted: true, session_id: null });
+      }
+      return ok(chatRows().slice(0, 200));
+    }
+    if (b === 'send' && m === 'POST') {
+      const data = (body ?? {}) as any;
+      const content = String(data?.content ?? '').trim();
+      const sessionId = String(data?.session_id ?? 'embedded-session');
+      if (!content) return fail('BAD_REQUEST', 'Message vide');
+      const userMessage = {
+        id: genId('msg'),
+        session_id: sessionId,
+        kind: 'user',
+        content,
+        metadata: null,
+        created_at: nowIso(),
+      };
+      const r = resolveProvider(data?.provider, data?.model);
+      let assistantText: string;
+      let meta: string;
+      if (r) {
+        try {
+          const res = await callProviderChat(r, [
+            { role: 'system', content: CHAT_SYSTEM_PROMPT },
+            { role: 'user', content },
+          ]);
+          assistantText = res.content;
+          meta = JSON.stringify({ provider: res.provider, model: res.model, latencyMs: res.latencyMs });
+        } catch (e) {
+          assistantText =
+            `Je n'ai pas pu joindre le fournisseur d'IA (${(e as Error).message}). ` +
+            'Vérifie ta clé dans Réglages → API & Clés, puis réessaie.';
+          meta = JSON.stringify({ error: String((e as Error).message ?? e) });
+        }
+      } else {
+        assistantText = buildStubReply(content);
+        meta = JSON.stringify({ provider: 'none', model: 'embedded-heuristic' });
+      }
+      const assistantMessage = {
+        id: genId('msg'),
+        session_id: sessionId,
+        kind: 'assistant',
+        content: assistantText,
+        metadata: meta,
+        created_at: nowIso(),
+      };
+      embStore.upsert('chat_messages', userMessage);
+      embStore.upsert('chat_messages', assistantMessage);
+      return ok({ user_message: userMessage, assistant_message: assistantMessage });
+    }
   }
 
   // ---------- Design audit ----------

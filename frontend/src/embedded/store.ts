@@ -40,7 +40,8 @@ export type EmbTable =
   | 'settings'
   | 'tasks'
   | 'signals'
-  | 'breakdowns';
+  | 'breakdowns'
+  | 'chat_messages';
 
 function readRows(t: EmbTable): any[] {
   try {

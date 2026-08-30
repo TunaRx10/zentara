@@ -1,2 +1,0 @@
-const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/web-OuYKesfO.js","assets/dist-NGLb1Cm5.js"])))=>i.map(i=>d[i]);
-import{T as e}from"./index-BunwORgI.js";import{registerPlugin as t}from"./dist-NGLb1Cm5.js";var n=t(`Preferences`,{web:()=>e(()=>import(`./web-OuYKesfO.js`).then(e=>new e.PreferencesWeb),__vite__mapDeps([0,1]))});export{n as Preferences};
