@@ -528,6 +528,36 @@ export function AppLayout(): React.ReactElement {
         )}
       </div>
 
+      {/* CTA vers la recherche de prospects (Moteur /one) — bien visible au sommet de la sidebar. */}
+      {(!isCollapsed || mode === 'drawer') ? (
+        <div className="px-4 pb-3">
+          <button
+            type="button"
+            onClick={() => {
+              onItemClick();
+              navigate('/one');
+            }}
+            className="w-full h-11 px-4 rounded-2xl bg-gradient-to-r from-primary to-violet-600 text-white text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all hover:brightness-110 active:scale-95"
+          >
+            <Rocket size={15} /> Rechercher des prospects
+          </button>
+        </div>
+      ) : (
+        <div className="px-2 pb-3 flex justify-center">
+          <button
+            type="button"
+            onClick={() => {
+              onItemClick();
+              navigate('/one');
+            }}
+            title="Rechercher des prospects"
+            className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-violet-600 text-white flex items-center justify-center shadow-lg shadow-primary/20 transition-all hover:brightness-110 active:scale-95"
+          >
+            <Rocket size={16} />
+          </button>
+        </div>
+      )}
+
       <ScrollArea className="flex-1 px-4">
         <nav className="space-y-1">
           {navItems.map((entry, idx) => {
