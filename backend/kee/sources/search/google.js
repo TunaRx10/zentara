@@ -31,17 +31,10 @@ class GoogleSource extends base_1.BaseSource {
             });
         });
     }
-    fallback(query, options) {
-        const count = Math.min(options?.count || 5, 10);
-        return Array.from({ length: count }, (_, i) => this.makeLead({
-            firstName: `Result`,
-            lastName: `${i + 1}`,
-            company: options?.company || query,
-            title: options?.title || "Contact",
-            website: `https://example.com/${i}`,
-            confidence: 0.5,
-            metadata: { snippet: `Google search result for: ${query}` },
-        }));
+    // Aucun résultat inventé : sans clé/CX configurés (ou réponse vide),
+    // cette source ne renvoie RIEN plutôt que de faux leads.
+    fallback(_query, _options) {
+        return [];
     }
     async getCompany(domain) {
         return this.makeCompany({

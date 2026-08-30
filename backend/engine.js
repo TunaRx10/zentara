@@ -232,8 +232,13 @@ function cleanResults(results) {
       if (isPersonalSite(r.website)) continue;
       if (isPersonalName(name)) continue;
     }
+    // 1ter) Nom contenant une URL / « project: » → description de repo, pas une entreprise.
+    if (/https?:\/\/|^AI Project:|: /.test(name)) continue;
     // 2) Nom type username/package sans signal entreprise → bruit.
     if (looksLikeUsername(name) && !hasCompanySignals(r)) continue;
+    // 2bis) Hors registres officiels (github, web search, social…), une vraie
+    //   entreprise doit avoir au moins un signal (site/email/tél/ville/pays).
+    if (!HIGH_QUALITY_SOURCES.has(src) && !hasCompanySignals(r)) continue;
 
     // 3) Score : bonus registres officiels, malus sources perso, bonus données.
     let s = Number(r.score) || 0;

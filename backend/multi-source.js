@@ -214,12 +214,13 @@ async function runSearch(q, opts = {}) {
   const maxMs = Number(opts.maxMs) || 35000;
   const apiKeys = opts.apiKeys || {};
   const asked = String(opts.sources || '').split(',').map((s) => s.trim()).filter(Boolean);
-  // Par défaut : TOUTES les sources gratuites (plus de sous-ensemble DEFAULTS).
+  // Par défaut : TOUTES les sources gratuites (adaptateurs kee actifs) +
+  // SEC EDGAR + Overpass. Plus de sous-ensemble restreint : chaque adaptateur
+  // disponible est interrogé (le filtre anti-bruit s'applique en aval,
+  // engine.js → looksLikeCompany/isNoiseCompany).
   const defaultIds = freeSources().map((s) => s.id);
-  // Par défaut : UNIQUEMENT les sources d'entreprises réelles (annuaires,
-  // registres, startups). Pas de social, developer, education, search brut.
-  // L'utilisateur peut override avec ?sources=npm,devto si besoin.
-  const wanted = new Set(asked.length ? asked : businessSourceIds());
+  const wanted = new Set(asked.length ? asked : defaultIds);
+  if (!asked.length) wanted.add('sec-edgar');
 
   let results = [];
   const errors = [];
