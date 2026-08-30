@@ -328,6 +328,52 @@ api.delete('/auth/me', (_req, res) => {
 // CRUD
 // ---------------------------------------------------------------------
 
+api.get('/companies/hot-companies', (req, res) => {
+  const minScore = Number(req.query.min_score || 70);
+  const limit = Number(req.query.limit || 25);
+  const offset = Number(req.query.offset || 0);
+  const sector = req.query.sector || null;
+
+  try {
+    let rows;
+    if (sector) {
+      rows = db.prepare(`
+        SELECT * FROM companies
+        WHERE score >= ? AND (sector LIKE ? OR industry LIKE ?)
+        ORDER BY score DESC, updated_at DESC
+        LIMIT ? OFFSET ?
+      `).all(minScore, `%${String(sector)}%`, `%${String(sector)}%`, limit, offset);
+    } else {
+      rows = db.prepare(`
+        SELECT * FROM companies
+        WHERE score >= ?
+        ORDER BY score DESC, updated_at DESC
+        LIMIT ? OFFSET ?
+      `).all(minScore, limit, offset);
+    }
+
+    const total = sector
+      ? Number(db.prepare('SELECT COUNT(*) AS c FROM companies WHERE score >= ? AND (sector LIKE ? OR industry LIKE ?)').get(minScore, `%${String(sector)}%`, `%${String(sector)}%`).c)
+      : Number(db.prepare('SELECT COUNT(*) AS c FROM companies WHERE score >= ?').get(minScore).c);
+
+    // Enrichir avec le nombre de prospects rattachés (pour le rollup front).
+    const enriched = rows.map((r) => {
+      const n = normalizeRow(r);
+      const pCount = Number(db.prepare('SELECT COUNT(*) AS c FROM prospects WHERE company_id = ?').get(n.id).c);
+      const pAvg = Number(db.prepare('SELECT AVG(score) AS s FROM prospects WHERE company_id = ?').get(n.id).s ?? 0);
+      const pHot = Number(db.prepare('SELECT COUNT(*) AS c FROM prospects WHERE company_id = ? AND score >= 70').get(n.id).c);
+      return { ...n, prospect_count: pCount, prospect_avg_score: Math.round(pAvg), hot_prospect_count: pHot };
+    });
+
+    ok(res, {
+      data: enriched,
+      meta: { total, limit, offset, threshold: minScore, sector },
+    });
+  } catch (e) {
+    fail(res, 500, 'DB_ERROR', String(e.message));
+  }
+});
+
 mountCrud(api, '/prospects', 'prospects', [
   'company_id', 'first_name', 'last_name', 'email', 'phone', 'role', 'sector',
   'address', 'city', 'country', 'website', 'social_profiles', 'google_maps_url',
@@ -614,25 +660,7 @@ api.get('/analytics/hot-prospects', (req, res) => {
   });
 });
 
-api.get('/companies/hot-companies', (req, res) => {
-  const minScore = Number(req.query.min_score || 70);
-  const limit = Number(req.query.limit || 25);
-  const offset = Number(req.query.offset || 0);
 
-  const rows = db.prepare(`
-    SELECT * FROM companies 
-    WHERE score >= ? 
-    ORDER BY score DESC, updated_at DESC
-    LIMIT ? OFFSET ?
-  `).all(minScore, limit, offset);
-
-  const total = Number(db.prepare("SELECT COUNT(*) AS c FROM companies WHERE score >= ?").get(minScore).c);
-
-  ok(res, {
-    data: rows.map((r) => normalizeRow(r)),
-    meta: { total, limit, offset, threshold: minScore, sector: req.query.sector || null },
-  });
-});
 
 // ---------------------------------------------------------------------
 // Monitoring

@@ -380,6 +380,9 @@ db.exec(SCHEMA);
     ['score_source', 'TEXT'],
     // AXE 1bis : moteur d'intelligence déterministe (consensus, signaux, opportunités, forecast, qualité).
     ['engine', 'TEXT'],
+    // L'endpoint /analytics/overview compte les analyses IA via provider IS NOT NULL.
+    ['provider', 'TEXT'],
+    ['model', 'TEXT'],
   ];
   for (const [name, type] of adds) {
     if (!cols.includes(name)) {

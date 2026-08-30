@@ -89,6 +89,44 @@ async function probeBackend(): Promise<boolean> {
   }
 }
 
+// ---- Proxy transparent vers le backend réel (Render) ----
+let _fwdExpire = 0;
+let _fwdInflight: Promise<boolean> | null = null;
+
+/**
+ * Tente le backend réel (même méthode/route/body). Retourne `data` en cas de
+ * succès (2xx), sinon undefined → le routeur embarqué prend le relais (contrat
+ * complet local : les routes absentes du backend — ex. /settings — continuent
+ * de fonctionner, donc aucun bouton ne casse).
+ */
+async function tryForwardBackend(method: string, path: string, body?: unknown): Promise<unknown | undefined> {
+  const base = getBackendUrl();
+  if (!base) return undefined;
+  if (Date.now() > _fwdExpire) {
+    _backendReachable = await probeBackend();
+    _fwdExpire = Date.now() + 10000;
+  }
+  if (!_backendReachable) return undefined;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    const res = await fetch(base + path, {
+      method,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return undefined; // 4xx/5xx → repli local
+    const json = await res.json();
+    if (json && typeof json === 'object' && json.success !== false && 'data' in json) return json.data;
+    if (json && typeof json === 'object' && (json as any).success !== false) return json;
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Appelle le backend réel pour la recherche engine (LinkedIn inclus). */
 async function fetchBackendSearch(payload: any): Promise<any | null> {
   const base = getBackendUrl();
@@ -357,6 +395,14 @@ export async function handleLocalRequest(method: string, path: string, body?: un
   const m = method.toUpperCase();
   const seg = segments;
   const [a, b, c, d] = seg; // premiers segments
+
+  // Proxy transparent : si le backend réel répond, on renvoie SES données
+  // (données réelles partout). S'il 4xx/5xx ou est injoignable → le routeur
+  // local ci-dessous répond (contrat complet, aucun bouton cassé).
+  if (a && a !== 'health' && a !== 'auth') {
+    const fwd = await tryForwardBackend(m, path, body);
+    if (fwd !== undefined) return ok(fwd);
+  }
 
   // ---------- Health / meta ----------
   if (a === 'health') {

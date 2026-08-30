@@ -16,7 +16,7 @@ import { ChatPage } from '@/pages/ChatPage';
 import { ContractsPage } from '@/pages/ContractsPage';
 import { SiteDesignAuditPage } from '@/pages/SiteDesignAuditPage';
 import { EmailsPage } from '@/pages/EmailsPage';
-import { EnginePage } from '@/pages/EnginePage';
+import { ZentaraOnePage } from '@/pages/ZentaraOnePage';
 import { LazyChunkErrorBoundary } from '@/components/LazyChunkErrorBoundary';
 
 const DashboardPage = lazy(() =>
@@ -67,7 +67,7 @@ export function AuthedRoutes(): React.ReactElement {
         <Route path="/settings" element={<SettingsPage />} />
 
         {/* Round 142 — Moteur UNIFIÉ (recherche + analyse + résultats + emails + assistant). */}
-        <Route path="/one" element={<EnginePage />} />
+        <Route path="/one" element={<ZentaraOnePage />} />
 
         {/* Anciennes pages moteur → redirigées vers /one. */}
         <Route path="/intelligence" element={<Navigate to="/one" replace />} />
