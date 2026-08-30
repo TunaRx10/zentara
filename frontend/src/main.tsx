@@ -1,4 +1,3 @@
-import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App.tsx';
@@ -31,10 +30,14 @@ if (!rootEl) {
     'CRITICAL: #root element absent from index.html</div>';
 } else {
   createRoot(rootEl).render(
-    <StrictMode>
-      <GlobalErrorBoundary>
-        <App />
-      </GlobalErrorBoundary>
-    </StrictMode>,
+    // NOTE : volontairement SANS <StrictMode>. StrictMode double-monte les
+    // effets en dev, mais en production React 19 il peut provoquer le crash
+    // « insertBefore … pas un enfant de ce nœud » au boot quand plusieurs
+    // effets (bootstrapEmbeddedEngine, heartbeat, auth, engine status)
+    // re-render en même temps que le ToastViewport s'insère/retire un nœud.
+    // On garde donc un arbre React stable et unique.
+    <GlobalErrorBoundary>
+      <App />
+    </GlobalErrorBoundary>,
   );
 }

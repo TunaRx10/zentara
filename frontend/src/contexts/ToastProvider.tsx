@@ -247,8 +247,14 @@ function ToastViewport(): React.ReactElement | null {
   const ctx = React.useContext(ToastContext);
   if (!ctx) return null;
   const { items, dismiss } = ctx;
-  if (items.length === 0) return null;
 
+  // IMPORTANT (bug insertBefore) : on NE retourne JAMAIS null quand il n'y a
+  // pas de toasts. Le conteneur <div> reste toujours monté avec une référence
+  // DOM stable pour React. Si on retournait null, React détruirait et
+  // recréerait le nœud racine à chaque apparition de toast → pendant des
+  // re-renders concurrents au boot, React peut exécuter un insertBefore sur
+  // un nœud qui vient d'être monté/démonté → « NotFoundError: insertBefore ».
+  // On affiche simplement la liste (vide) à l'intérieur du conteneur stable.
   return (
     <div
       role="status"
@@ -256,11 +262,10 @@ function ToastViewport(): React.ReactElement | null {
       data-testid="toast-viewport"
       className={cn(
         'fixed left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 pointer-events-none',
-        // Bottom clair pour le navbar bas (≈56-64px) + safe-area iOS.
-        // `bottom: max(5rem, calc(env(safe-area-inset-bottom) + 4.5rem))`
+        // Style appliqué uniquement quand il y a du contenu, pour ne pas
+        // bloquer les clics avec un conteneur invisible qui serait présent.
+        // `pointer-events-none` + enfants `pointer-events-auto` dans ToastCard.
         'bottom-20 max-[calc(100vw-2rem)]',
-        // Add iOS safe-area via arbitrary value (Tailwind ne supporte pas
-        // env() nativement — on utilise un style inline ci-dessous).
       )}
       style={{
         // iOS notch / home indicator ne doivent PAS chevaucher le toast.
