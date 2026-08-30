@@ -37,6 +37,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmailComposerModal } from '@/components/EmailComposerModal';
+import { EngineLauncher } from '@/components/EngineLauncher';
 import { getApiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 import { useToast } from '@/contexts/ToastProvider';
@@ -242,6 +243,9 @@ export function ZentaraOnePage(): React.ReactElement {
           </div>
         </div>
       </div>
+
+      {/* Moteur — section de lancement (toutes sources, session persistée) */}
+      <EngineLauncher />
 
       {/* Form */}
       <Card className="border-border/60 bg-card/60">
