@@ -20,6 +20,7 @@
  *   - Click = dismiss manuel. Hover = pause.
  */
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 
 /** ================================================================
@@ -248,27 +249,27 @@ function ToastViewport(): React.ReactElement | null {
   if (!ctx) return null;
   const { items, dismiss } = ctx;
 
-  // IMPORTANT (bug insertBefore) : on NE retourne JAMAIS null quand il n'y a
-  // pas de toasts. Le conteneur <div> reste toujours monté avec une référence
-  // DOM stable pour React. Si on retournait null, React détruirait et
-  // recréerait le nœud racine à chaque apparition de toast → pendant des
-  // re-renders concurrents au boot, React peut exécuter un insertBefore sur
-  // un nœud qui vient d'être monté/démonté → « NotFoundError: insertBefore ».
-  // On affiche simplement la liste (vide) à l'intérieur du conteneur stable.
-  return (
+  // IMPORTANT (bug insertBefore) : on monte le viewport dans un PORTAL sur
+  // document.body, PAS dans l'arbre React courant. La pile d'erreur « insertBefore
+  // … pas un enfant de ce nœud » montrait un <button> du ToastViewport en cours
+  // de commit pendant l'init — parce que l'arbre autour (AppLayout + Suspense du
+  // lazy Dashboard + toasts d'erreur backend au boot) montait/démontait des
+  // nœuds en concurrence, React insérait alors le bouton avant une référence qui
+  // venait d'être détachée.
+  //
+  // Avec un portail sur <body>, le parent du viewport est STABLE et hors de tout
+  // subtree suspendu/re-monté : React n'insère plus jamais devant une référence
+  // orpheline. On garde aussi un nœud conteneur toujours monté.
+  return createPortal(
     <div
       role="status"
       aria-live="polite"
       data-testid="toast-viewport"
       className={cn(
         'fixed left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 pointer-events-none',
-        // Style appliqué uniquement quand il y a du contenu, pour ne pas
-        // bloquer les clics avec un conteneur invisible qui serait présent.
-        // `pointer-events-none` + enfants `pointer-events-auto` dans ToastCard.
         'bottom-20 max-[calc(100vw-2rem)]',
       )}
       style={{
-        // iOS notch / home indicator ne doivent PAS chevaucher le toast.
         bottom: 'max(5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem))',
         maxWidth: 'calc(100vw - 2rem)',
       }}
@@ -276,7 +277,8 @@ function ToastViewport(): React.ReactElement | null {
       {items.map((t) => (
         <ToastCard key={t.id} item={t} onDismiss={() => dismiss(t.id)} />
       ))}
-    </div>
+    </div>,
+    document.body,
   );
 }
 
